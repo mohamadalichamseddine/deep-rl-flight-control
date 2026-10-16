@@ -1,0 +1,43 @@
+[project]
+name = "rocketlander"
+version = "0.1.0"
+description = "Autonomous rocket landing with deep reinforcement learning (PPO)"
+readme = "README.md"
+authors = [
+    { name = "mohamadalichamseddine", email = "mohamadali.chamseddine@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "box2d>=2.3.10",
+    "matplotlib>=3.11.2",
+    "pyyaml>=6.0.3",
+]
+
+[build-system]
+requires = ["uv_build>=0.9.13,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-ra", "--strict-markers"]
+filterwarnings = [
+    # Harmless warnings from the SWIG-generated Box2D bindings.
+    "ignore:builtin type .* has no __module__ attribute:DeprecationWarning",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.format]
+# Code blocks in docs are design sketches, not code.
+exclude = ["docs/**"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "NPY"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.17.1",
+]
