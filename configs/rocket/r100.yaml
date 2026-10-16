@@ -1,0 +1,26 @@
+# 100 kg rocket (see docs/plan.md §2), in 2D.
+#
+# Positions are in the rocket's own frame, in meters: origin at the center of the base,
+# +y up the rocket axis toward the nose, +x to the rocket's right when it stands upright.
+# Box2D calculates the center of mass and moment of inertia from these shapes and masses.
+
+body:            # a rectangle with its mass spread evenly
+  height: 3.0
+  width: 0.3
+  mass: 80.0
+
+engine_block:    # engine and legs: extra mass filling the bottom of the body
+  height: 0.4
+  mass: 20.0
+
+# Order = order of the throttle commands [u1, u2, u3].
+# direction = the way the force pushes the rocket (the exhaust goes the opposite way).
+# A side nozzle is named after the side it is mounted on: "left" pushes the rocket right.
+nozzles:
+  - {name: main,  position: [0.0,   0.0], direction: [0.0,  1.0], max_thrust: 2000.0}
+  - {name: left,  position: [-0.15, 2.7], direction: [1.0,  0.0], max_thrust: 25.0}
+  - {name: right, position: [0.15,  2.7], direction: [-1.0, 0.0], max_thrust: 25.0}
+
+legs:            # leg tip positions (used from Phase 2)
+  - [-0.6, 0.0]
+  - [0.6, 0.0]
