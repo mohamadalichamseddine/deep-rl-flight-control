@@ -1,6 +1,6 @@
 import pytest
 
-from rocketlander.rocket_spec import Body, EngineBlock, Nozzle, RocketSpec
+from rocketlander.rocket_spec import Body, EngineBlock, Leg, Nozzle, RocketSpec
 
 
 def test_r100_loads_with_nozzles_in_command_order(rocket: RocketSpec) -> None:
@@ -25,7 +25,7 @@ def test_engine_block_must_fit_within_the_body(rocket: RocketSpec) -> None:
 
 
 def test_legs_must_reach_below_the_base(rocket: RocketSpec) -> None:
-    legs_at_base_level = ((-0.6, 0.0), (0.6, 0.0))
+    legs_at_base_level = (Leg(top=(-0.15, 0.5), tip=(-0.6, 0.0)),)
     with pytest.raises(ValueError, match="engine clears the ground"):
         RocketSpec(rocket.body, rocket.engine_block, rocket.nozzles, legs=legs_at_base_level)
 

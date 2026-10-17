@@ -1,7 +1,7 @@
 """Fly the rocket through a fixed sequence of nozzle commands and plot what happens.
 
 A visual check of the physics: free fall, braking, hovering, and moving sideways by tilting.
-There is no ground yet (Phase 2), so the sequence stays well above it.
+The sequence stays well above the ground.
 
     uv run python scripts/scripted_flight.py          # saves runs/scripted_flight.png
     uv run python scripts/scripted_flight.py --show   # also opens a window

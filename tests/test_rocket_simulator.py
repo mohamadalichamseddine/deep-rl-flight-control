@@ -45,16 +45,72 @@ def test_box2d_calculates_mass_properties_from_the_shapes(rocket: RocketSpec) ->
 
 
 def test_shapes_have_the_rocket_dimensions(rocket: RocketSpec) -> None:
-    # Upright with the base at the origin: the body spans x ±0.15 m and y 0-3 m, and the
-    # engine block fills the bottom 0.4 m.
-    sim = _simulator(rocket, RocketState(0.0, COM_HEIGHT, 0.0, 0.0))
+    # Upright with the base 10 m up: the body spans x ±0.15 m and 3 m up from the base, the
+    # engine block fills the bottom 0.4 m, and the legs reach from 0.5 m up to 0.2 m below.
+    base = 10.0
+    sim = _simulator(rocket, RocketState(0.0, base + COM_HEIGHT, 0.0, 0.0))
 
-    body, engine_block = sim.shapes()
+    shapes = sim.shapes()
 
-    for corners, top in ((body, 3.0), (engine_block, 0.4)):
-        xs, ys = [x for x, _ in corners], [y for _, y in corners]
-        assert (min(xs), max(xs)) == pytest.approx((-0.15, 0.15), abs=1e-6)
-        assert (min(ys), max(ys)) == pytest.approx((0.0, top), abs=1e-6)
+    assert [name for name, _ in shapes] == ["body", "engine block", "leg", "leg"]
+    expected = [((-0.15, 0.15), (0.0, 3.0)), ((-0.15, 0.15), (0.0, 0.4))]
+    for (_, corners), (x_span, y_span) in zip(shapes, expected, strict=False):
+        xs, ys = [x for x, _ in corners], [y - base for _, y in corners]
+        assert (min(xs), max(xs)) == pytest.approx(x_span, abs=1e-5)
+        assert (min(ys), max(ys)) == pytest.approx(y_span, abs=1e-5)
+    for _, corners in shapes[2:]:
+        assert min(y - base for _, y in corners) == pytest.approx(-0.2, abs=1e-5)
+        assert max(y - base for _, y in corners) == pytest.approx(0.5, abs=1e-5)
+
+
+def test_touchdown_on_the_legs_records_the_state_just_before_contact(rocket: RocketSpec) -> None:
+    # Standing height of the center of mass: 1.24 m above the base + 0.2 m legs below it.
+    sim = _simulator(rocket, RocketState(0.0, 1.44 + 0.05, 0.0, -1.0))
+
+    for _ in range(10):
+        sim.step([0, 0, 0])
+
+    assert sim.touchdown is not None
+    assert sim.touchdown.parts == {"leg"}
+    # It fell 3-5 cm (Box2D starts a contact up to 2 cm early, its collision margin), so just
+    # before contact it was falling at sqrt(1² + 2·g·fall) = 1.2-1.4 m/s. Box2D's contact
+    # forces then stopped it.
+    assert -1.41 <= sim.touchdown.state.vy <= -1.18
+    assert abs(sim.state().vy) < 0.5
+
+
+def test_engines_are_cut_after_touchdown(rocket: RocketSpec) -> None:
+    sim = _simulator(rocket, RocketState(0.0, 1.44 + 0.05, 0.0, -1.0))
+    _fly(sim, [0, 0, 0], 0.2)
+    assert sim.touchdown is not None
+
+    state = _fly(sim, [1, 1, 0], 1.0)  # full main thrust would lift off at 10 m/s²
+
+    assert state.y == pytest.approx(1.44, abs=0.05)
+    assert state.theta == pytest.approx(0.0, abs=1e-3)
+
+
+def test_touchdown_reports_the_body_hitting_the_ground(rocket: RocketSpec) -> None:
+    # Upside down, the nose (1.76 m from the center of mass) hits the ground first.
+    sim = _simulator(rocket, RocketState(0.0, 1.76 + 0.1, 0.0, -3.0, theta=math.pi))
+
+    _fly(sim, [0, 0, 0], 0.2)
+
+    assert sim.touchdown is not None
+    assert sim.touchdown.parts == {"body"}
+
+
+def test_reset_starts_a_fresh_flight(rocket: RocketSpec) -> None:
+    start = RocketState(0.3, 1.44 + 0.5, 0.2, -2.0, theta=0.05)
+    sim = _simulator(rocket, start)
+    first = [sim.step([0.4, 0.1, 0.0]) for _ in range(60)]
+    assert sim.touchdown is not None
+
+    sim.reset(start)
+    assert sim.touchdown is None
+    second = [sim.step([0.4, 0.1, 0.0]) for _ in range(60)]
+
+    assert second == first
 
 
 def test_reset_then_state_returns_the_same_state(rocket: RocketSpec) -> None:
