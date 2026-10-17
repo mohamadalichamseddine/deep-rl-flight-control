@@ -65,7 +65,7 @@ class RocketLandingEnv(gym.Env):
 
         # Center-of-mass height when standing on the legs: the target of the shaping reward.
         lowest_tip = min(leg.tip[1] for leg in self.rocket.legs)
-        self._standing_height = self.sim.com_height - lowest_tip
+        self.standing_height = self.sim.com_height - lowest_tip
         self._max_thrust = max(nozzle.max_thrust for nozzle in self.rocket.nozzles)
         self._max_steps = round(self.config.limits.time_limit / self.config.dt)
 
@@ -202,7 +202,7 @@ class RocketLandingEnv(gym.Env):
     def _shaping_potential(self, s: RocketState) -> float:
         """Higher (closer to 0) when near the landing point, slow, and upright."""
         w = self.config.reward
-        distance = math.hypot(s.x, s.y - self._standing_height)
+        distance = math.hypot(s.x, s.y - self.standing_height)
         speed = math.hypot(s.vx, s.vy)
         return -(w.distance * distance + w.speed * speed + w.tilt * abs(s.theta))
 

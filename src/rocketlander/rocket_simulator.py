@@ -54,7 +54,7 @@ class RocketSimulator:
             raise ValueError(f"substeps must be >= 1, got {substeps}")
         self.spec = spec
         self.dt = dt
-        self._gravity = gravity
+        self.gravity = gravity
         self._substeps = substeps
         self._build_world()
 
@@ -147,7 +147,7 @@ class RocketSimulator:
 
     def _build_world(self) -> None:
         spec = self.spec
-        self._world = Box2D.b2World(gravity=(0.0, -self._gravity), doSleep=False)
+        self._world = Box2D.b2World(gravity=(0.0, -self.gravity), doSleep=False)
         self._contacts = _GroundContacts()
         self._world.contactListener = self._contacts
         self.touchdown: Touchdown | None = None
