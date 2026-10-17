@@ -1,0 +1,35 @@
+# Landing environment: timing, landing rules, flight limits, reward, and starting conditions.
+
+dt: 0.02            # control step [s], 50 Hz
+substeps: 5         # Box2D steps per control step
+
+landing:            # a touchdown is a safe landing only if all of these hold (judged just before contact)
+  max_x_error: 0.5        # distance from the pad center [m]
+  max_vx: 0.5             # horizontal speed [m/s]
+  max_vy: 1.0             # vertical speed [m/s]
+  max_tilt_deg: 5.0
+  max_spin_deg_s: 5.0
+
+limits:             # crossing one of these ends the episode
+  max_x: 100.0            # |x| [m]
+  max_altitude: 300.0     # [m]
+  max_tilt_deg: 90.0      # past horizontal: lost control
+  time_limit: 60.0        # [s]
+
+reward:
+  # Shaping: every step earns the improvement in -(distance·w + speed·w + tilt·w), so getting
+  # closer to the pad, slower, and more upright all pay.
+  distance: 1.0                   # per m from the landing point
+  speed: 1.0                      # per m/s
+  tilt: 10.0                      # per rad (about 0.17 per degree)
+  fuel: 0.3                       # per second of full main-engine thrust (side nozzles: by thrust)
+  # Once, at the end of the episode:
+  landed: 100.0
+  unsafe_touchdown: -50.0         # plus the next line times the impact speed [m/s]
+  unsafe_touchdown_per_speed: -10.0
+  lost_control: -100.0            # tilted past the limit or left the flight region
+
+levels:             # starting conditions by difficulty (0 = easiest); each range is [min, max]
+  - {altitude: [50, 80],   x: [-5, 5],   vx: [-1, 1],   vy: [-10, -5],  tilt_deg: [-3, 3],   spin_deg_s: [0, 0]}
+  - {altitude: [50, 150],  x: [-20, 20], vx: [-5, 5],   vy: [-20, -5],  tilt_deg: [-10, 10], spin_deg_s: [-5, 5]}
+  - {altitude: [100, 200], x: [-40, 40], vx: [-10, 10], vy: [-30, -10], tilt_deg: [-15, 15], spin_deg_s: [-10, 10]}

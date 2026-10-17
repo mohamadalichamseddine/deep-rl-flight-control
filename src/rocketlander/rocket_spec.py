@@ -49,11 +49,19 @@ class Nozzle:
 
 
 @dataclass(frozen=True)
+class Leg:
+    """A massless strut from the side of the body (top) down to the tip that touches ground."""
+
+    top: tuple[float, float]
+    tip: tuple[float, float]
+
+
+@dataclass(frozen=True)
 class RocketSpec:
     body: Body
     engine_block: EngineBlock
     nozzles: tuple[Nozzle, ...]  # order = order of the throttle commands
-    legs: tuple[tuple[float, float], ...]  # leg tip positions
+    legs: tuple[Leg, ...]
 
     def __post_init__(self) -> None:
         if self.engine_block.height > self.body.height:
@@ -61,7 +69,7 @@ class RocketSpec:
         names = [n.name for n in self.nozzles]
         if len(set(names)) != len(names):
             raise ValueError(f"nozzle names must be unique, got {names}")
-        if any(tip_y >= 0 for _, tip_y in self.legs):
+        if any(leg.tip[1] >= 0 for leg in self.legs):
             raise ValueError(
                 "leg tips must reach below the base (y < 0), so the engine clears the ground"
             )

@@ -21,8 +21,9 @@ nozzles:
   - {name: left,  position: [-0.15, 2.7], direction: [1.0,  0.0], max_thrust: 25.0}
   - {name: right, position: [0.15,  2.7], direction: [-1.0, 0.0], max_thrust: 25.0}
 
-# Leg tip positions (used from Phase 2). They reach 0.2 m below the base, so the main
-# nozzle stays clear of the ground when the rocket stands on its legs.
+# Legs: struts from the side of the body (top) down to the tip. The tips reach 0.2 m below
+# the base, so the main nozzle stays clear of the ground when the rocket stands on its legs.
+# Their mass is part of the engine block.
 legs:
-  - [-0.6, -0.2]
-  - [0.6, -0.2]
+  - {top: [-0.15, 0.5], tip: [-0.6, -0.2]}
+  - {top: [0.15,  0.5], tip: [0.6,  -0.2]}
