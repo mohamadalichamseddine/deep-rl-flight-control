@@ -12,3 +12,6 @@ dist/
 
 # Training outputs (checkpoints, TensorBoard logs, videos)
 runs/
+
+# Local project notes (not published)
+docs/

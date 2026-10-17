@@ -1,4 +1,4 @@
-# 100 kg rocket (see docs/plan.md §2), in 2D.
+# 100 kg rocket, in 2D.
 #
 # Positions are in the rocket's own frame, in meters: origin at the center of the base,
 # +y up the rocket axis toward the nose, +x to the rocket's right when it stands upright.
@@ -21,6 +21,8 @@ nozzles:
   - {name: left,  position: [-0.15, 2.7], direction: [1.0,  0.0], max_thrust: 25.0}
   - {name: right, position: [0.15,  2.7], direction: [-1.0, 0.0], max_thrust: 25.0}
 
-legs:            # leg tip positions (used from Phase 2)
-  - [-0.6, 0.0]
-  - [0.6, 0.0]
+# Leg tip positions (used from Phase 2). They reach 0.2 m below the base, so the main
+# nozzle stays clear of the ground when the rocket stands on its legs.
+legs:
+  - [-0.6, -0.2]
+  - [0.6, -0.2]

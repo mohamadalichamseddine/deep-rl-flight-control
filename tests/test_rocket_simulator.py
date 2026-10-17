@@ -44,6 +44,19 @@ def test_box2d_calculates_mass_properties_from_the_shapes(rocket: RocketSpec) ->
     assert sim.moment_of_inertia == pytest.approx(INERTIA, rel=1e-6)
 
 
+def test_shapes_have_the_rocket_dimensions(rocket: RocketSpec) -> None:
+    # Upright with the base at the origin: the body spans x ±0.15 m and y 0-3 m, and the
+    # engine block fills the bottom 0.4 m.
+    sim = _simulator(rocket, RocketState(0.0, COM_HEIGHT, 0.0, 0.0))
+
+    body, engine_block = sim.shapes()
+
+    for corners, top in ((body, 3.0), (engine_block, 0.4)):
+        xs, ys = [x for x, _ in corners], [y for _, y in corners]
+        assert (min(xs), max(xs)) == pytest.approx((-0.15, 0.15), abs=1e-6)
+        assert (min(ys), max(ys)) == pytest.approx((0.0, top), abs=1e-6)
+
+
 def test_reset_then_state_returns_the_same_state(rocket: RocketSpec) -> None:
     state = RocketState(x=-3.0, y=42.0, vx=1.5, vy=-7.0, theta=0.1, omega=-0.2)
     result = _simulator(rocket, state).state()

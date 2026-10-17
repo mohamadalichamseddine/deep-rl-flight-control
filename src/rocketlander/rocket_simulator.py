@@ -98,6 +98,14 @@ class RocketSimulator:
             self._world.Step(h, _VELOCITY_ITERATIONS, _POSITION_ITERATIONS)
         return self.state()
 
+    def shapes(self) -> list[list[tuple[float, float]]]:
+        """Corner points of each Box2D shape on the rocket, in world coordinates [m]."""
+        body = self._body
+        return [
+            [tuple(body.GetWorldPoint(vertex)) for vertex in fixture.shape.vertices]
+            for fixture in body.fixtures
+        ]
+
     def state(self) -> RocketState:
         """The rocket's current state."""
         body = self._body
