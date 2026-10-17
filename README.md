@@ -6,6 +6,8 @@ Autonomous rocket landing using deep reinforcement learning (PPO), neural networ
 ```powershell
 uv run python scripts/fly_manually.py                 # fly the rocket yourself (arrow keys)
 uv run python scripts/fly_manually.py --flights 1 --record runs/my_flight.mp4
+uv run python scripts/watch_controller.py --level 2   # watch the PD autopilot land
+uv run python scripts/evaluate_controller.py          # test sets: metrics and plots in runs/
 uv run python scripts/draw_rocket.py --show           # the rocket as Box2D sees it
 uv run python scripts/scripted_flight.py --show       # a fixed command sequence, plotted
 uv run python scripts/random_episodes.py              # random actions: env check and speed
