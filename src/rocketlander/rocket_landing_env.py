@@ -34,21 +34,29 @@ class RocketLandingEnv(gym.Env):
 
     ``reset(options={"state": RocketState(...)})`` starts from a given state instead of a
     random one.
+
+    Rendering is off by default (fastest, for training). ``render_mode="human"`` shows a live
+    window paced to real time; ``render_mode="rgb_array"`` makes ``render()`` return images.
     """
 
-    metadata = {"render_modes": []}
+    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 50}
 
     def __init__(
         self,
         level: int = 0,
         rocket: RocketSpec | None = None,
         config: EnvConfig | None = None,
+        render_mode: str | None = None,
     ) -> None:
         self.rocket = rocket or load_rocket(DEFAULT_ROCKET)
         self.config = config or load_env_config(DEFAULT_ENV_CONFIG)
         if not 0 <= level < len(self.config.levels):
             raise ValueError(f"level must be 0-{len(self.config.levels) - 1}, got {level}")
+        if render_mode is not None and render_mode not in self.metadata["render_modes"]:
+            raise ValueError(f"render_mode must be one of {self.metadata['render_modes']}")
         self.level = level
+        self.render_mode = render_mode
+        self.renderer = None  # created on the first render
         self.sim = RocketSimulator(self.rocket, dt=self.config.dt, substeps=self.config.substeps)
 
         n_nozzles = len(self.rocket.nozzles)
@@ -69,6 +77,12 @@ class RocketLandingEnv(gym.Env):
         self.sim.reset(start)
         self._steps = 0
         self._potential = self._shaping_potential(start)
+        self._throttles = [0.0] * len(self.rocket.nozzles)
+        self._info: dict[str, Any] = {}
+        if self.renderer is not None:
+            self.renderer.start_episode()
+        if self.render_mode == "human":
+            self.render()
         return self._observation(start), {}
 
     def step(self, action: np.ndarray) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
@@ -89,7 +103,36 @@ class RocketLandingEnv(gym.Env):
 
         terminated = outcome is not None and outcome != "time_limit"
         truncated = outcome == "time_limit"
+        self._throttles, self._info = throttles.tolist(), info
+        if self.render_mode == "human":
+            self.render()
         return self._observation(state), float(reward), terminated, truncated, info
+
+    def render(self) -> np.ndarray | None:
+        if self.render_mode is None:
+            gym.logger.warn("render() called with render_mode=None; nothing to draw")
+            return None
+        if self.renderer is None:
+            from rocketlander.rocket_renderer import RocketRenderer  # pygame only when drawing
+
+            self.renderer = RocketRenderer(self.render_mode, self.metadata["render_fps"])
+            self.renderer.start_episode()
+        time_s = self._steps * self.config.dt
+        self.renderer.draw(self.sim, self._throttles, time_s, self.level, self._info)
+        if self.render_mode == "human":
+            self.renderer.show(episode_over="outcome" in self._info)
+            return None
+        return self.renderer.to_array()
+
+    @property
+    def window_closed(self) -> bool:
+        """True once the person watching has closed the window (or pressed Esc)."""
+        return self.renderer is not None and self.renderer.closed
+
+    def close(self) -> None:
+        if self.renderer is not None:
+            self.renderer.close()
+            self.renderer = None
 
     def _random_start(self) -> RocketState:
         ranges = self.config.levels[self.level]
