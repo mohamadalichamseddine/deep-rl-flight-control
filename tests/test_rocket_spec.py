@@ -24,6 +24,12 @@ def test_engine_block_must_fit_within_the_body(rocket: RocketSpec) -> None:
         RocketSpec(rocket.body, EngineBlock(height=5.0, mass=20.0), rocket.nozzles, rocket.legs)
 
 
+def test_legs_must_reach_below_the_base(rocket: RocketSpec) -> None:
+    legs_at_base_level = ((-0.6, 0.0), (0.6, 0.0))
+    with pytest.raises(ValueError, match="engine clears the ground"):
+        RocketSpec(rocket.body, rocket.engine_block, rocket.nozzles, legs=legs_at_base_level)
+
+
 def test_masses_must_be_positive() -> None:
     with pytest.raises(ValueError, match="mass must be positive"):
         Body(height=3.0, width=0.3, mass=0.0)

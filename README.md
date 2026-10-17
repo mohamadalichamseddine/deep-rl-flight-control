@@ -1,9 +1,6 @@
 # Autonomous Rocket Landing
 Autonomous rocket landing using deep reinforcement learning (PPO), neural networks, and physics simulation
 
-- [Project definition](docs/project.md): problem, success criteria, and scope
-- [Implementation plan](docs/plan.md): decisions, architecture, and phases
-
 ## Development
 
 Requires [uv](https://docs.astral.sh/uv/). It creates the virtual environment in `.venv/` and

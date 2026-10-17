@@ -61,6 +61,10 @@ class RocketSpec:
         names = [n.name for n in self.nozzles]
         if len(set(names)) != len(names):
             raise ValueError(f"nozzle names must be unique, got {names}")
+        if any(tip_y >= 0 for _, tip_y in self.legs):
+            raise ValueError(
+                "leg tips must reach below the base (y < 0), so the engine clears the ground"
+            )
 
     def nozzle(self, name: str) -> Nozzle:
         for nozzle in self.nozzles:
