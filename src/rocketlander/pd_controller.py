@@ -17,7 +17,7 @@ class PDGains:
     max_tilt_deg: float = 15.0
     # Vertical: a target descent speed that slows as the ground approaches.
     descent_per_height: float = 0.25  # target speed per m of height [1/s]
-    touchdown_speed: float = 0.5  # target speed at the ground [m/s]
+    touchdown_speed: float = 0.15  # target speed at the ground [m/s], half the leg limit
     max_descent_speed: float = 12.0  # [m/s]
     vertical: float = 1.5  # desired vertical acceleration per m/s of speed error [1/s]
     # Near the ground, come down only when over the pad and not drifting: the descent slows
