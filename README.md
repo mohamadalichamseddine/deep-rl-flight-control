@@ -1,6 +1,16 @@
 # Autonomous Rocket Landing
 Autonomous rocket landing using deep reinforcement learning (PPO), neural networks, and physics simulation
 
+## Try it
+
+```powershell
+uv run python scripts/fly_manually.py                 # fly the rocket yourself (arrow keys)
+uv run python scripts/fly_manually.py --flights 1 --record runs/my_flight.mp4
+uv run python scripts/draw_rocket.py --show           # the rocket as Box2D sees it
+uv run python scripts/scripted_flight.py --show       # a fixed command sequence, plotted
+uv run python scripts/random_episodes.py              # random actions: env check and speed
+```
+
 ## Development
 
 Requires [uv](https://docs.astral.sh/uv/). It creates the virtual environment in `.venv/` and

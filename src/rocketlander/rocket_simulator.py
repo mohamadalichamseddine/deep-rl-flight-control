@@ -137,6 +137,14 @@ class RocketSimulator:
             for fixture in body.fixtures
         ]
 
+    def to_world(self, point: tuple[float, float]) -> tuple[float, float]:
+        """A point in rocket coordinates (e.g. a nozzle position), in world coordinates [m]."""
+        return tuple(self._body.GetWorldPoint(point))
+
+    def direction_to_world(self, direction: tuple[float, float]) -> tuple[float, float]:
+        """A direction in rocket coordinates (e.g. a nozzle's), in world coordinates."""
+        return tuple(self._body.GetWorldVector(direction))
+
     def _build_world(self) -> None:
         spec = self.spec
         self._world = Box2D.b2World(gravity=(0.0, -self._gravity), doSleep=False)
