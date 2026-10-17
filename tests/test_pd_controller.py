@@ -24,10 +24,11 @@ def test_actions_are_valid(controller: PDController) -> None:
 
 
 def test_hovering_upright_over_the_pad_uses_hover_thrust(controller: PDController) -> None:
-    # At 20 m the target is to descend at 0.5 + 0.25 · height m/s; starting at exactly
-    # that speed, only the weight needs holding: main thrust = weight, side nozzles off.
-    height = 20.0 - 1.44
-    action = controller.act(_observation(vy=-(0.5 + 0.25 * height)))
+    # Starting at exactly the target descent speed for this height, only the weight needs
+    # holding: main thrust = weight, side nozzles off.
+    gains, height = controller.gains, 20.0 - 1.44
+    target_speed = gains.touchdown_speed + gains.descent_per_height * height
+    action = controller.act(_observation(vy=-target_speed))
     throttles = (action + 1) / 2
     assert throttles[0] == pytest.approx(100 * 9.81 / 2000, abs=1e-3)
     assert throttles[1:] == pytest.approx([0.0, 0.0], abs=1e-6)

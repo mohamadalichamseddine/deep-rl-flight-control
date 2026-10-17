@@ -6,7 +6,7 @@ substeps: 5         # Box2D steps per control step
 landing:            # a touchdown is a safe landing only if all of these hold (judged just before contact)
   max_x_error: 0.5        # distance from the pad center [m]
   max_vx: 0.5             # horizontal speed [m/s]
-  max_vy: 1.0             # vertical speed [m/s]
+  max_vy: 0.3             # vertical speed [m/s]: faster could break the legs
   max_tilt_deg: 5.0
   max_spin_deg_s: 5.0
 

@@ -82,14 +82,14 @@ def test_actions_map_to_throttles() -> None:
 
 def test_gentle_upright_touchdown_on_the_pad_is_a_landing(config: EnvConfig) -> None:
     env = RocketLandingEnv()
-    _start(env, RocketState(0.1, STANDING + 0.3, 0.0, -0.5))
+    _start(env, RocketState(0.1, STANDING + 0.3, 0.0, -0.15))
 
     total, (_, reward, terminated, truncated, info) = _run(env, HOVER_ACTION)
 
     assert (terminated, truncated) == (True, False)
     assert info["outcome"] == "landed"
     assert info["failed_checks"] == []
-    assert info["touchdown"]["vy"] == pytest.approx(-0.5, abs=0.1)
+    assert info["touchdown"]["vy"] == pytest.approx(-0.15, abs=0.05)
     assert reward > config.reward.landed - 5
 
 
@@ -102,7 +102,7 @@ def test_fast_touchdown_is_unsafe_and_penalized_by_impact_speed(config: EnvConfi
     assert terminated
     assert info["outcome"] == "unsafe_touchdown"
     # Hover thrust cancels gravity, so the rocket keeps its 8 m/s down to the ground.
-    assert info["failed_checks"] == ["vertical speed 8.00 > 1 m/s"]
+    assert info["failed_checks"] == ["vertical speed 8.00 > 0.3 m/s"]
     impact_speed = abs(info["touchdown"]["vy"])
     expected = (
         config.reward.unsafe_touchdown + config.reward.unsafe_touchdown_per_speed * impact_speed
@@ -114,15 +114,14 @@ def test_fast_touchdown_is_unsafe_and_penalized_by_impact_speed(config: EnvConfi
     ("x", "tilt_deg", "failed"),
     [
         (2.0, 0.0, ["x error"]),  # soft and upright, but 2 m off the pad
-        # Tilted 8°: the main engine also pushes sideways, so it drifts on the way down.
-        (0.0, 8.0, ["horizontal speed", "tilt"]),
+        (0.0, 8.0, ["tilt"]),  # soft and on the pad, but tilted 8° (limit 5°)
     ],
 )
 def test_soft_touchdown_off_the_pad_or_tilted_is_unsafe(
     x: float, tilt_deg: float, failed: list[str]
 ) -> None:
     env = RocketLandingEnv()
-    _start(env, RocketState(x, STANDING + 0.3, 0.0, -0.5, theta=math.radians(tilt_deg)))
+    _start(env, RocketState(x, STANDING + 0.1, 0.0, -0.15, theta=math.radians(tilt_deg)))
 
     _, (*_, info) = _run(env, HOVER_ACTION)
 
