@@ -1,14 +1,14 @@
 # PPO training settings. The `ppo` block is passed to stable_baselines3.PPO as is.
 
 level: 0                    # difficulty level of the training starts
-total_timesteps: 5000000    # 20 ms control steps, summed over all rockets
-n_envs: 8                   # rockets flying in parallel, one per CPU core
+total_steps: 5000000        # 20 ms control steps, summed over all rockets
+parallel_rockets: 8         # rockets flying in parallel, one per CPU core
 seed: 0
 
-# Every eval_every steps, the current network (without exploration noise) flies the
+# Every validate_every steps, the current network (without exploration noise) flies the
 # validation starts: separate from the test set, which stays untouched until the end.
-eval_every: 250000
-eval_episodes: 50
+validate_every: 250000
+validation_episodes: 50
 
 ppo:
   learning_rate: 3.0e-4

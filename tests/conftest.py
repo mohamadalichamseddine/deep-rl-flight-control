@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from rocketlander.rocket_spec import RocketSpec, load_rocket
+from rocketlander.rocket.rocket_spec import RocketSpec, load_rocket
 
 CONFIGS = Path(__file__).resolve().parents[1] / "configs"
 
