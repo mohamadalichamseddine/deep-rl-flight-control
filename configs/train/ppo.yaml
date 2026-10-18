@@ -1,0 +1,23 @@
+# PPO training settings. The `ppo` block is passed to stable_baselines3.PPO as is.
+
+level: 0                    # difficulty level of the training starts
+total_timesteps: 5000000    # 20 ms control steps, summed over all rockets
+n_envs: 8                   # rockets flying in parallel, one per CPU core
+seed: 0
+
+# Every eval_every steps, the current network (without exploration noise) flies the
+# validation starts: separate from the test set, which stays untouched until the end.
+eval_every: 250000
+eval_episodes: 50
+
+ppo:
+  learning_rate: 3.0e-4
+  n_steps: 1024             # steps per rocket between network updates
+  batch_size: 256
+  n_epochs: 10
+  gamma: 0.999              # long horizon: a flight lasts up to 3000 steps
+  gae_lambda: 0.98
+  clip_range: 0.2
+  ent_coef: 0.0
+  policy_kwargs:            # our network (rocket_network.py): actor and critic layer sizes
+    hidden_sizes: [64, 64]

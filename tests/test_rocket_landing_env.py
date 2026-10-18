@@ -93,20 +93,24 @@ def test_gentle_upright_touchdown_on_the_pad_is_a_landing(config: EnvConfig) -> 
     assert reward > config.reward.landed - 5
 
 
-def test_fast_touchdown_is_unsafe_and_penalized_by_impact_speed(config: EnvConfig) -> None:
+@pytest.mark.parametrize(
+    ("vy", "expected"),
+    [
+        (-0.4, -10 - 10 * (0.4 / 0.3 - 1)),  # near miss: 0.4 m/s with a 0.3 limit, about -13
+        (-1.0, -10 - 10 * (1.0 / 0.3 - 1)),  # harder: about -33
+        (-8.0, -100.0),  # a crash: capped at the lost-control penalty
+    ],
+)
+def test_unsafe_touchdown_penalty_grows_with_the_miss(vy: float, expected: float) -> None:
     env = RocketLandingEnv()
-    _start(env, RocketState(0.0, STANDING + 0.5, 0.0, -8.0))
+    _start(env, RocketState(0.0, STANDING + 0.5, 0.0, vy))
 
     _, (_, reward, terminated, _, info) = _run(env, HOVER_ACTION)
 
     assert terminated
     assert info["outcome"] == "unsafe_touchdown"
-    # Hover thrust cancels gravity, so the rocket keeps its 8 m/s down to the ground.
-    assert info["failed_checks"] == ["vertical speed 8.00 > 0.3 m/s"]
-    impact_speed = abs(info["touchdown"]["vy"])
-    expected = (
-        config.reward.unsafe_touchdown + config.reward.unsafe_touchdown_per_speed * impact_speed
-    )
+    # Hover thrust cancels gravity, so the rocket keeps its speed down to the ground.
+    assert info["failed_checks"] == [f"vertical speed {abs(vy):.2f} > 0.3 m/s"]
     assert reward == pytest.approx(expected, abs=1.0)
 
 
@@ -161,20 +165,21 @@ def test_leaving_the_flight_region_ends_the_episode(config: EnvConfig) -> None:
     assert terminated and info["outcome"] == "out_of_bounds"
 
 
-def test_time_limit_truncates_the_episode(config: EnvConfig) -> None:
+def test_running_out_of_time_is_a_failure(config: EnvConfig) -> None:
     limits = dataclasses.replace(config.limits, time_limit=1.0)
     env = RocketLandingEnv(config=dataclasses.replace(config, limits=limits))
     _start(env, RocketState(0.0, 100.0, 0.0, 0.0))
 
     steps = 0
     while True:
-        *_, terminated, truncated, info = env.step(HOVER_ACTION)
+        _, reward, terminated, truncated, info = env.step(HOVER_ACTION)
         steps += 1
         if terminated or truncated:
             break
 
-    assert (terminated, truncated, steps) == (False, True, 50)
+    assert (terminated, truncated, steps) == (True, False, 50)
     assert info["outcome"] == "time_limit"
+    assert reward == pytest.approx(config.reward.time_limit, abs=1.0)
 
 
 @pytest.mark.parametrize(("vy", "sign"), [(-5.0, +1), (+5.0, -1)])

@@ -28,9 +28,9 @@ class RocketLandingEnv(gym.Env):
 
     The episode ends (terminated) at the first ground contact, judged as "landed" or
     "unsafe_touchdown"; when the rocket tilts past the limit ("lost_control"); or when it
-    leaves the flight region ("out_of_bounds"). It is cut off (truncated) at the time limit
-    ("time_limit"). The final step's ``info`` holds the outcome and, after a touchdown, the
-    touchdown state and any failed landing checks.
+    leaves the flight region ("out_of_bounds"); or at the time limit ("time_limit"), which
+    stands in for running out of fuel. The final step's ``info`` holds the outcome and,
+    after a touchdown, the touchdown state and any failed landing checks.
 
     ``reset(options={"state": RocketState(...)})`` starts from a given state instead of a
     random one.
@@ -101,8 +101,9 @@ class RocketLandingEnv(gym.Env):
         self._potential = potential
         reward += self._final_reward(outcome, touchdown)
 
-        terminated = outcome is not None and outcome != "time_limit"
-        truncated = outcome == "time_limit"
+        # Every ending is a real ending, including the time limit (out of fuel), so nothing
+        # is ever cut off early: truncated stays False.
+        terminated, truncated = outcome is not None, False
         self._throttles, self._info = throttles.tolist(), info
         if self.render_mode == "human":
             self.render()
@@ -182,19 +183,22 @@ class RocketLandingEnv(gym.Env):
             return None, {}
         return outcome, {"outcome": outcome}
 
-    def _failed_landing_checks(self, touchdown: Touchdown) -> list[str]:
+    def _landing_checks(self, touchdown: Touchdown) -> list[tuple[str, float, float, str]]:
+        """(name, value, limit, unit) of each check a safe landing must pass."""
         criteria, s = self.config.landing, touchdown.state
-        failed = [f"{part} touched the ground" for part in sorted(touchdown.parts - {"leg"})]
-        checks = [
+        return [
             ("x error", abs(s.x), criteria.max_x_error, "m"),
             ("horizontal speed", abs(s.vx), criteria.max_vx, "m/s"),
             ("vertical speed", abs(s.vy), criteria.max_vy, "m/s"),
             ("tilt", math.degrees(abs(s.theta)), criteria.max_tilt_deg, "deg"),
             ("spin", math.degrees(abs(s.omega)), criteria.max_spin_deg_s, "deg/s"),
         ]
+
+    def _failed_landing_checks(self, touchdown: Touchdown) -> list[str]:
+        failed = [f"{part} touched the ground" for part in sorted(touchdown.parts - {"leg"})]
         failed += [
             f"{name} {value:.2f} > {limit:g} {unit}"
-            for name, value, limit, unit in checks
+            for name, value, limit, unit in self._landing_checks(touchdown)
             if value > limit
         ]
         return failed
@@ -215,8 +219,18 @@ class RocketLandingEnv(gym.Env):
         if outcome == "landed":
             return w.landed
         if outcome == "unsafe_touchdown":
-            s = touchdown.state
-            return w.unsafe_touchdown + w.unsafe_touchdown_per_speed * math.hypot(s.vx, s.vy)
+            if touchdown.parts - {"leg"}:  # the body hit the ground: as bad as it gets
+                return w.lost_control
+            # Graded: a near miss costs a little, a crash a lot. Each failed check adds how far
+            # past its limit the touchdown was, in limits (0.6 m off center = 0.2 of 0.5 m).
+            missed = sum(
+                value / limit - 1
+                for _, value, limit, _ in self._landing_checks(touchdown)
+                if value > limit
+            )
+            return max(w.unsafe_touchdown + w.per_limit_missed * missed, w.lost_control)
         if outcome in ("lost_control", "out_of_bounds"):
             return w.lost_control
+        if outcome == "time_limit":
+            return w.time_limit
         return 0.0

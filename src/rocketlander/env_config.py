@@ -35,8 +35,9 @@ class RewardWeights:
     fuel: float
     landed: float
     unsafe_touchdown: float
-    unsafe_touchdown_per_speed: float
+    per_limit_missed: float
     lost_control: float
+    time_limit: float
 
 
 @dataclass(frozen=True)

@@ -6,6 +6,7 @@ Re-flies a test episode exactly as the evaluation flew it: same seed, same contr
     uv run python scripts/watch_controller.py --level 2 --test-episode 137
     uv run python scripts/watch_controller.py --random                 # new random starts
     uv run python scripts/watch_controller.py --flights 3 --record runs/pd_demo.mp4
+    uv run python scripts/watch_controller.py --model runs/ppo/<run>/best_model.zip
 """
 
 import argparse
@@ -18,7 +19,8 @@ from rocketlander.video_writer import VideoWriter
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--controller", default="pd", choices=sorted(CONTROLLERS))
+    parser.add_argument("--controller", default="pd", choices=CONTROLLERS)
+    parser.add_argument("--model", help="a trained network (.zip); implies --controller ppo")
     parser.add_argument("--level", type=int, default=0, choices=[0, 1, 2])
     parser.add_argument("--test-episode", type=int, default=0, help="first test episode to fly")
     parser.add_argument("--random", action="store_true", help="random starts, not the test set")
@@ -27,7 +29,7 @@ def main() -> None:
     args = parser.parse_args()
 
     env = RocketLandingEnv(level=args.level, render_mode="human")
-    controller = make_controller(args.controller, env)
+    controller = make_controller("ppo" if args.model else args.controller, env, args.model)
     fps = env.metadata["render_fps"]
     video = VideoWriter(args.record, fps) if args.record else None
     flights = 0
