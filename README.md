@@ -4,14 +4,31 @@ Autonomous rocket landing using deep reinforcement learning (PPO), neural networ
 ## Try it
 
 ```powershell
-uv run python scripts/fly_manually.py                 # fly the rocket yourself (arrow keys)
-uv run python scripts/fly_manually.py --flights 1 --record runs/my_flight.mp4
-uv run python scripts/watch_controller.py --level 2   # watch the PD autopilot land
-uv run python scripts/evaluate_controller.py          # test sets: metrics and plots in runs/
-uv run python scripts/draw_rocket.py --show           # the rocket as Box2D sees it
-uv run python scripts/scripted_flight.py --show       # a fixed command sequence, plotted
-uv run python scripts/random_episodes.py              # random actions: env check and speed
+uv run python scripts/environment/fly_manually.py        # fly the rocket yourself (arrow keys)
+uv run python scripts/environment/fly_manually.py --flights 1 --record runs/my_flight.mp4
+uv run python scripts/evaluation/watch_controller.py --level 2  # watch the PD autopilot land
+uv run python scripts/evaluation/evaluate_controller.py  # test sets: metrics and plots in runs/
+uv run python scripts/rocket/draw_rocket.py --show       # the rocket as Box2D sees it
+uv run python scripts/rocket/scripted_flight.py --show   # a fixed command sequence, plotted
+uv run python scripts/environment/random_episodes.py     # random actions: env check and speed
 ```
+
+## Project layout
+
+The code in `src/rocketlander/`, the scripts in `scripts/`, and the tests in `tests/` use the
+same folders:
+
+| Folder | What it holds |
+|---|---|
+| `rocket/` | the rocket: its description, its state, and its physics (Box2D) |
+| `environment/` | the landing task: observations, actions, rewards, endings |
+| `pd/` | the hand-written PD autopilot, the baseline |
+| `ppo/` | the neural network, its PPO training, and the trained network as a controller |
+| `evaluation/` | measuring any controller on the fixed test sets |
+| `visualization/` | drawing flights: the live window and video files |
+
+Settings live in `configs/`: `rocket/` (the rocket's shape and engines), `env/` (landing
+rules, rewards, starting conditions), and `train/` (PPO training settings).
 
 ## Development
 
