@@ -1,4 +1,4 @@
-"""Compare evaluated controllers side by side, from the summaries in runs/evaluation/.
+"""Compare tested controllers side by side, from the summaries in runs/test/.
 
 Run evaluate_controller.py for each controller first.
 
@@ -36,17 +36,25 @@ def main() -> None:
     parser.add_argument("--level", type=int, default=0, choices=[0, 1, 2])
     args = parser.parse_args()
 
-    suffix = f"_level{args.level}.json"
-    files = sorted((ROOT / "runs" / "evaluation").glob(f"*{suffix}"))
-    files.sort(key=lambda f: not f.name.startswith("pd_"))  # the baseline first
+    test = ROOT / "runs" / "test"
+    ending = f"tested_on_level{args.level}.json"
+    files = sorted(test.rglob(f"*{ending}"))
     if not files:
-        raise SystemExit("no evaluations found: run evaluate_controller.py first")
-    names = [f.name.removesuffix(suffix) for f in files]
-    summaries = [json.loads(f.read_text(encoding="utf-8")) for f in files]
+        raise SystemExit("no test results found: run evaluate_controller.py first")
+    # Each result is named after where it is, e.g. pd or <experiment>/seed0/level0/best_network.
+    results = {
+        (f.parent.relative_to(test) / f.name.removesuffix(ending).rstrip("_")).as_posix(): f
+        for f in files
+    }
+    names = sorted(results, key=lambda name: name != "pd")  # the baseline first
+    summaries = [json.loads(results[name].read_text(encoding="utf-8")) for name in names]
 
-    width = max(len(n) for n in names) + 2
-    print(f"level {args.level}, test set\n")
-    print(f"{'':<32}" + "".join(f"{n:>{width}}" for n in names))
+    # The names are long, so the columns are numbered.
+    print(f"tested on level {args.level}\n")
+    for i, name in enumerate(names, 1):
+        print(f"  [{i}] {name}")
+    width = 10
+    print(f"\n{'':<32}" + "".join(f"{f'[{i}]':>{width}}" for i in range(1, len(names) + 1)))
     for label, read, fmt in ROWS:
         cells = []
         for summary in summaries:
