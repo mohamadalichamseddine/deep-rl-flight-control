@@ -13,8 +13,10 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 
+from rocketlander.config_files import ENV_CONFIG_FILE, ROCKET_SPEC_FILE
+from rocketlander.environment.env_config import build_env_config
 from rocketlander.rocket.rocket_simulator import RocketSimulator
-from rocketlander.rocket.rocket_spec import load_rocket
+from rocketlander.rocket.rocket_spec import build_rocket_spec
 from rocketlander.rocket.rocket_state import RocketState
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -26,23 +28,26 @@ def main() -> None:
     parser.add_argument("--show", action="store_true", help="open the drawing in a window")
     args = parser.parse_args()
 
-    rocket = load_rocket(ROOT / "configs" / "rocket" / "r100.yaml")
-    simulator = RocketSimulator(rocket)
+    rocket_spec = build_rocket_spec(ROCKET_SPEC_FILE)
+    env_config = build_env_config(ENV_CONFIG_FILE)
+    rocket_simulator = RocketSimulator(
+        rocket_spec, gravity=env_config.gravity, dt=env_config.dt, substeps=env_config.substeps
+    )
     # Stand the rocket upright on its legs: the ground (y = 0) is under the leg tips, and
     # everything in rocket coordinates is lifted by the height of the base.
-    base_height = -min(leg.tip[1] for leg in rocket.legs)
-    simulator.reset(
-        RocketState(x=0.0, y=base_height + simulator.center_of_mass_height, vx=0.0, vy=0.0)
+    base_height = -min(leg.tip[1] for leg in rocket_spec.legs)
+    rocket_simulator.reset(
+        RocketState(x=0.0, y=base_height + rocket_simulator.center_of_mass_height, vx=0.0, vy=0.0)
     )
 
     fig, ax = plt.subplots(figsize=(7, 9), constrained_layout=True)
     ax.set_title(
-        f"r100 as Box2D sees it: {simulator.mass:.0f} kg, "
-        f"inertia {simulator.moment_of_inertia:.1f} kg·m²"
+        f"r100 as Box2D sees it: {rocket_simulator.mass:.0f} kg, "
+        f"inertia {rocket_simulator.moment_of_inertia:.1f} kg·m²"
     )
 
     labeled = set()
-    for name, corners in simulator.shapes():
+    for name, corners in rocket_simulator.shapes():
         label = None if name in labeled else name
         labeled.add(name)
         ax.add_patch(Polygon(corners, facecolor=COLORS[name], edgecolor="black", label=label))
@@ -50,10 +55,10 @@ def main() -> None:
     ax.annotate("", xy=(0.3, 0.0), xytext=(0.3, base_height), arrowprops={"arrowstyle": "<->"})
     ax.text(0.35, base_height / 2, f"{base_height:g} m engine clearance", va="center")
 
-    com_y = base_height + simulator.center_of_mass_height
+    com_y = base_height + rocket_simulator.center_of_mass_height
     ax.plot(0.0, com_y, "o", color="crimson", markersize=9, zorder=5)
     ax.annotate(
-        f"center of mass\n{simulator.center_of_mass_height:.2f} m above the base (Box2D)",
+        f"center of mass\n{rocket_simulator.center_of_mass_height:.2f} m above the base (Box2D)",
         (0.0, com_y),
         xytext=(0.45, com_y),
         va="center",
@@ -61,7 +66,7 @@ def main() -> None:
         color="crimson",
     )
 
-    for nozzle in rocket.nozzles:
+    for nozzle in rocket_spec.nozzles:
         (x, y), (dx, dy) = nozzle.position, nozzle.direction
         y += base_height
         # Flame: the exhaust leaves opposite to the force on the rocket.

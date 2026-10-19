@@ -12,9 +12,14 @@ Re-flies a test episode exactly as the evaluation flew it: same seed, same contr
 
 import argparse
 
+from rocketlander.config_files import ENV_CONFIG_FILE, PD_GAINS_FILE, ROCKET_SPEC_FILE
+from rocketlander.environment.env_config import build_env_config
+from rocketlander.environment.landing_judge import describe_failures
 from rocketlander.environment.rocket_landing_env import RocketLandingEnv
 from rocketlander.evaluation.controllers import CONTROLLERS, make_controller
 from rocketlander.evaluation.evaluation import seed_for_test_episode
+from rocketlander.pd.pd_controller import build_pd_gains
+from rocketlander.rocket.rocket_spec import build_rocket_spec
 from rocketlander.visualization.video_writer import VideoWriter
 
 
@@ -29,8 +34,16 @@ def main() -> None:
     parser.add_argument("--record", help="save the flights to this MP4 file")
     args = parser.parse_args()
 
-    env = RocketLandingEnv(level=args.level, render_mode="human")
-    controller = make_controller("network" if args.network else args.controller, env, args.network)
+    rocket_spec = build_rocket_spec(ROCKET_SPEC_FILE)
+    env_config = build_env_config(ENV_CONFIG_FILE)
+    env = RocketLandingEnv(rocket_spec, env_config, level=args.level, render_mode="human")
+    pd_gains = build_pd_gains(PD_GAINS_FILE)
+    controller = make_controller(
+        "network" if args.network else args.controller,
+        env.rocket_simulator,
+        pd_gains,
+        args.network,
+    )
     fps = env.metadata["render_fps"]
     video = VideoWriter(args.record, fps) if args.record else None
     flights = 0
@@ -40,18 +53,18 @@ def main() -> None:
             seed = None if args.random else seed_for_test_episode(episode)
             observation, _ = env.reset(seed=seed)
             if video:
-                video.add(env.renderer.to_array())
+                video.add(env.environment_renderer.to_array())
             done = False
             while not done and not env.window_closed:
                 observation, _, terminated, truncated, info = env.step(controller(observation))
                 if video:
-                    video.add(env.renderer.to_array())
+                    video.add(env.environment_renderer.to_array())
                 done = terminated or truncated
             if done:
                 flights += 1
                 label = "random start" if args.random else f"test episode {episode}"
-                checks = "; ".join(info.get("failed_checks", []))
-                print(f"{label}: {info['outcome']}" + (f" ({checks})" if checks else ""))
+                reasons = "; ".join(describe_failures(info["touchdown"], info["failed_checks"]))
+                print(f"{label}: {info['outcome']}" + (f" ({reasons})" if reasons else ""))
                 if video:
                     video.hold(1.5)
     finally:

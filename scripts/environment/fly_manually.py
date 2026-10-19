@@ -15,7 +15,12 @@ import argparse
 import numpy as np
 import pygame
 
+from rocketlander.config_files import ENV_CONFIG_FILE, ROCKET_SPEC_FILE
+from rocketlander.environment.env_config import build_env_config
+from rocketlander.environment.landing_judge import describe_failures
+from rocketlander.environment.outcome import Outcome
 from rocketlander.environment.rocket_landing_env import RocketLandingEnv
+from rocketlander.rocket.rocket_spec import build_rocket_spec
 from rocketlander.visualization.video_writer import VideoWriter
 
 CAPTION = "Rocket landing - Up: main engine, Left/Right: steer"
@@ -31,7 +36,9 @@ def main() -> None:
     parser.add_argument("--record", help="save the flights to this MP4 file")
     args = parser.parse_args()
 
-    env = RocketLandingEnv(level=args.level, render_mode="human")
+    rocket_spec = build_rocket_spec(ROCKET_SPEC_FILE)
+    env_config = build_env_config(ENV_CONFIG_FILE)
+    env = RocketLandingEnv(rocket_spec, env_config, level=args.level, render_mode="human")
     fps = env.metadata["render_fps"]
     video = VideoWriter(args.record, fps) if args.record else None
     flights = landed = 0
@@ -39,13 +46,13 @@ def main() -> None:
         while not env.window_closed and flights != args.flights:
             env.reset()
             pygame.display.set_caption(CAPTION)
-            env.renderer.controls_hint = CONTROLS
+            env.environment_renderer.controls_hint = CONTROLS
             if flights == 0:
                 # Start paused at t = 0: pressing Space also gives the window the keyboard focus.
-                env.renderer.paused = True
+                env.environment_renderer.paused = True
                 env.render()
             if video:
-                video.add(env.renderer.to_array())
+                video.add(env.environment_renderer.to_array())
             done = False
             while not done and not env.window_closed:
                 keys = pygame.key.get_pressed()
@@ -55,13 +62,13 @@ def main() -> None:
                 )
                 _, _, terminated, truncated, info = env.step(action)
                 if video:
-                    video.add(env.renderer.to_array())
+                    video.add(env.environment_renderer.to_array())
                 done = terminated or truncated
             if done:
                 flights += 1
-                landed += info["outcome"] == "landed"
-                checks = "; ".join(info.get("failed_checks", []))
-                print(f"flight {flights}: {info['outcome']}" + (f" ({checks})" if checks else ""))
+                landed += info["outcome"] == Outcome.LANDED
+                reasons = "; ".join(describe_failures(info["touchdown"], info["failed_checks"]))
+                print(f"flight {flights}: {info['outcome']}" + (f" ({reasons})" if reasons else ""))
                 if video:
                     video.hold(1.5)
     finally:

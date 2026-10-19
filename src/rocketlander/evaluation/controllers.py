@@ -2,19 +2,22 @@
 
 from pathlib import Path
 
-from rocketlander.environment.rocket_landing_env import RocketLandingEnv
 from rocketlander.evaluation.evaluation import Controller
-from rocketlander.pd.pd_controller import PDController
+from rocketlander.pd.pd_controller import PDGains, build_pd_controller
+from rocketlander.rocket.rocket_simulator import RocketSimulator
 
 CONTROLLERS = ("pd", "network")
 
 
 def make_controller(
-    name: str, env: RocketLandingEnv, network_path: str | Path | None = None
+    name: str,
+    rocket_simulator: RocketSimulator,
+    pd_gains: PDGains,
+    network_path: str | Path | None,
 ) -> Controller:
     """``"pd"``: the hand-written autopilot. ``"network"``: a trained network from a file."""
     if name == "pd":
-        return PDController.for_env(env).act
+        return build_pd_controller(rocket_simulator, pd_gains).act
     if name == "network":
         if network_path is None:
             raise ValueError("the network controller needs a trained network file (--network)")

@@ -3,9 +3,12 @@ import math
 import numpy as np
 import pytest
 
+from rocketlander.environment.env_config import EnvConfig
+from rocketlander.environment.outcome import Outcome
 from rocketlander.environment.rocket_landing_env import RocketLandingEnv
 from rocketlander.evaluation.evaluation import run_test_set
-from rocketlander.pd.pd_controller import PDController
+from rocketlander.pd.pd_controller import PDController, PDGains, build_pd_controller
+from rocketlander.rocket.rocket_spec import RocketSpec
 
 
 def _observation(x=0.0, y=20.0, vx=0.0, vy=0.0, tilt=0.0, spin=0.0) -> np.ndarray:
@@ -13,8 +16,9 @@ def _observation(x=0.0, y=20.0, vx=0.0, vy=0.0, tilt=0.0, spin=0.0) -> np.ndarra
 
 
 @pytest.fixture(scope="module")
-def controller() -> PDController:
-    return PDController.for_env(RocketLandingEnv())
+def controller(rocket_spec: RocketSpec, env_config: EnvConfig, pd_gains: PDGains) -> PDController:
+    env = RocketLandingEnv(rocket_spec, env_config, level=0, render_mode=None)
+    return build_pd_controller(env.rocket_simulator, pd_gains)
 
 
 def test_actions_are_valid(controller: PDController) -> None:
@@ -26,8 +30,8 @@ def test_actions_are_valid(controller: PDController) -> None:
 def test_hovering_upright_over_the_pad_uses_hover_thrust(controller: PDController) -> None:
     # Starting at exactly the target descent speed for this height, only the weight needs
     # holding: main thrust = weight, side nozzles off.
-    gains, height = controller.gains, 20.0 - 1.44
-    target_speed = gains.touchdown_speed + gains.descent_per_height * height
+    pd_gains, height = controller.pd_gains, 20.0 - 1.44
+    target_speed = pd_gains.touchdown_speed + pd_gains.descent_per_height * height
     action = controller.act(_observation(vy=-target_speed))
     throttles = (action + 1) / 2
     assert throttles[0] == pytest.approx(100 * 9.81 / 2000, abs=1e-3)
@@ -52,7 +56,10 @@ def test_off_to_the_right_it_tilts_left_to_come_back(controller: PDController) -
 
 
 @pytest.mark.parametrize("level", [0, 1, 2])
-def test_lands_the_first_test_episodes_of_every_level(level: int) -> None:
-    env = RocketLandingEnv(level=level)
-    results = run_test_set(PDController.for_env(env).act, env, episodes=8)
-    assert [r.outcome for r in results] == ["landed"] * 8
+def test_lands_the_first_test_episodes_of_every_level(
+    rocket_spec: RocketSpec, env_config: EnvConfig, pd_gains: PDGains, level: int
+) -> None:
+    env = RocketLandingEnv(rocket_spec, env_config, level=level, render_mode=None)
+    controller = build_pd_controller(env.rocket_simulator, pd_gains)
+    results = run_test_set(controller.act, env, episodes=8)
+    assert [r.outcome for r in results] == [Outcome.LANDED] * 8

@@ -1,11 +1,13 @@
 """Plots of an evaluation: flight paths and how close touchdowns came to the safe-landing limits."""
 
+import math
 from pathlib import Path
 
 from matplotlib.figure import Figure
 from matplotlib.patches import Rectangle
 
 from rocketlander.environment.env_config import LandingCriteria
+from rocketlander.environment.outcome import Outcome
 from rocketlander.evaluation.evaluation import EpisodeResult
 
 SURFACE = "#fcfcfb"
@@ -23,8 +25,8 @@ def plot_evaluation(
     fig = Figure(figsize=(16, 5.2), layout="constrained", facecolor=SURFACE)
     paths, position, attitude = fig.subplots(1, 3)
     fig.suptitle(title, color=TEXT, fontsize=13)
-    landed = [r for r in results if r.outcome == "landed"]
-    failed = [r for r in results if r.outcome != "landed"]
+    landed = [r for r in results if r.outcome == Outcome.LANDED]
+    failed = [r for r in results if r.outcome != Outcome.LANDED]
 
     # Flight paths of the center of mass, failed ones drawn on top.
     for group, color, label in ((landed, LANDED, "landed"), (failed, FAILED, "failed")):
@@ -39,7 +41,7 @@ def plot_evaluation(
     touchdowns = [(r, r.touchdown) for r in results if r.touchdown is not None]
     _scatter_with_limits(
         position,
-        [(r, t["x"], -t["vy"]) for r, t in touchdowns],
+        [(r, t.state.x, -t.state.vy) for r, t in touchdowns],
         x_limit=criteria.max_off_center,
         y_range=(0.0, criteria.max_vy),
         title="Touchdown: position and vertical speed",
@@ -48,7 +50,7 @@ def plot_evaluation(
     )
     _scatter_with_limits(
         attitude,
-        [(r, t["vx"], t["tilt_deg"]) for r, t in touchdowns],
+        [(r, t.state.vx, math.degrees(t.state.tilt)) for r, t in touchdowns],
         x_limit=criteria.max_vx,
         y_range=(-criteria.max_tilt_deg, criteria.max_tilt_deg),
         title="Touchdown: horizontal speed and tilt",
@@ -82,11 +84,11 @@ def _scatter_with_limits(ax, points, x_limit, y_range, title, xlabel, ylabel) ->
             label="safe-landing limits",
         )
     )
-    for outcome, color, marker, label in (
+    for landed, color, marker, label in (
         (True, LANDED, "o", "landed"),
         (False, FAILED, "X", "failed"),
     ):
-        chosen = [(x, y) for r, x, y in points if (r.outcome == "landed") == outcome]
+        chosen = [(x, y) for r, x, y in points if (r.outcome == Outcome.LANDED) == landed]
         if chosen:
             xs, ys = zip(*chosen, strict=True)
             ax.scatter(

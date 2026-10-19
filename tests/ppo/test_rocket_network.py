@@ -1,9 +1,11 @@
 import torch
 from stable_baselines3 import PPO
 
+from rocketlander.environment.env_config import EnvConfig
 from rocketlander.environment.rocket_landing_env import RocketLandingEnv
 from rocketlander.ppo.network_controller import ScaledObservation
 from rocketlander.ppo.rocket_network import RocketNetwork, SB3PolicyAdapter
+from rocketlander.rocket.rocket_spec import RocketSpec
 
 
 def test_network_has_separate_actor_and_critic_of_the_chosen_size() -> None:
@@ -19,10 +21,10 @@ def test_network_has_separate_actor_and_critic_of_the_chosen_size() -> None:
     assert not shared
 
 
-def test_ppo_trains_our_network() -> None:
+def test_ppo_trains_our_network(rocket_spec: RocketSpec, env_config: EnvConfig) -> None:
     ppo = PPO(
         SB3PolicyAdapter,
-        ScaledObservation(RocketLandingEnv()),
+        ScaledObservation(RocketLandingEnv(rocket_spec, env_config, level=0, render_mode=None)),
         policy_kwargs={"hidden_sizes": [64, 64]},
         n_steps=64,
         batch_size=64,

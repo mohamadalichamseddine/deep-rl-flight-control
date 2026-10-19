@@ -16,7 +16,10 @@ import argparse
 import json
 from pathlib import Path
 
-from rocketlander.environment.rocket_landing_env import RocketLandingEnv
+from rocketlander.config_files import ENV_CONFIG_FILE, PD_GAINS_FILE, ROCKET_SPEC_FILE
+from rocketlander.environment.env_config import build_env_config
+from rocketlander.environment.outcome import Outcome
+from rocketlander.environment.rocket_landing_env import RocketLandingEnv, observation_to_state
 from rocketlander.evaluation.controllers import CONTROLLERS, make_controller
 from rocketlander.evaluation.evaluation import (
     can_stop_before_the_ground,
@@ -26,6 +29,8 @@ from rocketlander.evaluation.evaluation import (
     summarize,
 )
 from rocketlander.evaluation.evaluation_plots import plot_evaluation
+from rocketlander.pd.pd_controller import build_pd_gains
+from rocketlander.rocket.rocket_spec import build_rocket_spec
 
 ROOT = Path(__file__).resolve().parents[2]
 TRAINING = ROOT / "runs" / "training"
@@ -54,13 +59,17 @@ def main() -> None:
     out, prefix = results_location(args.controller, args.network)
     label = (out.relative_to(TEST) / prefix.rstrip("_")).as_posix()  # e.g. pd
 
+    rocket_spec = build_rocket_spec(ROCKET_SPEC_FILE)
+    env_config = build_env_config(ENV_CONFIG_FILE)
+    pd_gains = build_pd_gains(PD_GAINS_FILE)
     for level in [args.level] if args.level is not None else [0, 1, 2]:
-        env = RocketLandingEnv(level=level)
-        infeasible = sum(
-            not can_stop_before_the_ground(env, env.reset(seed=seed_for_test_episode(i))[0])
+        env = RocketLandingEnv(rocket_spec, env_config, level=level, render_mode=None)
+        starts = [
+            observation_to_state(env.reset(seed=seed_for_test_episode(i))[0])
             for i in range(args.episodes)
-        )
-        controller = make_controller(args.controller, env, args.network)
+        ]
+        infeasible = sum(not can_stop_before_the_ground(env.rocket_simulator, s) for s in starts)
+        controller = make_controller(args.controller, env.rocket_simulator, pd_gains, args.network)
         results = run_test_set(controller, env, args.episodes)
         summary = summarize(results)
 
@@ -68,7 +77,7 @@ def main() -> None:
         print(f"\n=== {label}, tested on level {level} ===")
         print(f"starts no controller could save (too fast to stop in time): {infeasible}")
         print(format_summary(summary))
-        failed = [r.seed - seed_for_test_episode(0) for r in results if r.outcome != "landed"]
+        failed = [r.seed - seed_for_test_episode(0) for r in results if r.outcome != Outcome.LANDED]
         if failed:
             shown = ", ".join(map(str, failed[:10])) + (" ..." if len(failed) > 10 else "")
             print(f"failed test episodes (watch with watch_controller.py): {shown}")
@@ -76,7 +85,7 @@ def main() -> None:
         out.mkdir(parents=True, exist_ok=True)
         (out / f"{name}.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
         title = f"{label}, tested on level {level}: landed {summary['landing_rate']:.1%}"
-        plot = plot_evaluation(results, env.config.landing, title, out / f"{name}.png")
+        plot = plot_evaluation(results, env.env_config.landing, title, out / f"{name}.png")
         print(f"saved {out / (name + '.json')} and {plot}")
 
 

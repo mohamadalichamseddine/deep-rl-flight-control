@@ -1,5 +1,6 @@
-# Landing environment: timing, landing rules, flight limits, reward, and starting conditions.
+# Landing environment: gravity, timing, landing rules, flight limits, reward, and starting conditions.
 
+gravity: 9.81       # [m/s²]
 dt: 0.02            # control step [s], 50 Hz
 substeps: 5         # Box2D steps per control step
 
