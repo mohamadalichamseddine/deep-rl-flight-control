@@ -1,0 +1,22 @@
+# PD autopilot gains (see src/rocketlander/pd/pd_controller.py).
+
+# Horizontal: desired sideways acceleration from the position and velocity errors.
+position_gain: 0.36               # [1/s²]
+velocity_gain: 1.2                # [1/s]
+max_tilt_deg: 15.0
+
+# Vertical: a target descent speed that slows as the ground approaches.
+descent_per_height: 0.25          # target speed per m of height [1/s]
+touchdown_speed: 0.15             # target speed at the ground [m/s], half the leg limit
+max_descent_speed: 12.0           # [m/s]
+vertical_gain: 1.5                # desired vertical acceleration per m/s of speed error [1/s]
+
+# Near the ground, come down only when over the pad and not drifting: the descent slows to a
+# hover while off-center, giving the horizontal loop time to finish.
+hold_height: 3.0                  # [m]
+off_center_to_stop_descent: 1.0   # |x| [m] + |vx| [m/s] at which the descent stops
+
+# Attitude: desired angular acceleration from the tilt and spin errors. This loop is faster
+# than the horizontal one, which relies on it.
+tilt_gain: 4.0                    # [1/s²]
+spin_gain: 3.6                    # [1/s]

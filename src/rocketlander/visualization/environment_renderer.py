@@ -12,6 +12,8 @@ import numpy as np
 os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 import pygame  # noqa: E402 (must come after the line above)
 
+from rocketlander.environment.landing_judge import describe_failures  # noqa: E402
+from rocketlander.environment.outcome import Outcome  # noqa: E402
 from rocketlander.rocket.rocket_simulator import RocketSimulator  # noqa: E402
 
 WIDTH, HEIGHT = 960, 720  # [px]; multiples of 16, as video encoders prefer
@@ -34,15 +36,15 @@ FLAME_WIDTH = {"main": 0.24}
 SIDE_FLAME_LENGTH, SIDE_FLAME_WIDTH = 0.5, 0.08
 
 OUTCOME_TITLES = {
-    "landed": "LANDED",
-    "unsafe_touchdown": "UNSAFE TOUCHDOWN",
-    "lost_control": "LOST CONTROL",
-    "out_of_bounds": "OUT OF BOUNDS",
-    "time_limit": "TIME LIMIT",
+    Outcome.LANDED: "LANDED",
+    Outcome.UNSAFE_TOUCHDOWN: "UNSAFE TOUCHDOWN",
+    Outcome.LOST_CONTROL: "LOST CONTROL",
+    Outcome.OUT_OF_BOUNDS: "OUT OF BOUNDS",
+    Outcome.TIME_LIMIT: "TIME LIMIT",
 }
 
 
-class RocketRenderer:
+class EnvironmentRenderer:
     """Draws frames of the landing scene in a window ("human") or off screen ("rgb_array").
 
     The camera frames the rocket and the pad together and zooms in as the rocket comes down.
@@ -77,31 +79,31 @@ class RocketRenderer:
 
     def draw(
         self,
-        simulator: RocketSimulator,
+        rocket_simulator: RocketSimulator,
         throttles: Sequence[float],
         time_s: float,
         level: int,
         info: dict[str, Any],
     ) -> None:
         """Draw one frame of the scene onto the surface."""
-        state = simulator.state()
+        state = rocket_simulator.state()
         self._trail.append((state.x, state.y))
         self._set_camera(state.x, state.y)
         # After touchdown the engines are cut, and the numbers shown are those the landing was
         # judged on: the state just before contact, not after Box2D's contact forces.
         shown_state = state
-        if simulator.touchdown is not None:
+        if rocket_simulator.touchdown is not None:
             throttles = [0.0] * len(throttles)
-            shown_state = simulator.touchdown.state
+            shown_state = rocket_simulator.touchdown.state
 
         self.surface.blit(self._sky, (0, 0))
         self._draw_ground()
         self._draw_trail()
-        self._draw_rocket(simulator, throttles)
+        self._draw_rocket(rocket_simulator, throttles)
         self._draw_scale_bar()
-        names = [nozzle.name for nozzle in simulator.rocket.nozzles]
+        names = [nozzle.name for nozzle in rocket_simulator.rocket_spec.nozzles]
         self._draw_status(shown_state, names, throttles, time_s, level)
-        if info.get("outcome"):
+        if "outcome" in info:
             self._draw_outcome(info)
         if self.mode == "human":
             help_text = f"Space pause · -/+ speed ({self.speed:g}x) · Esc quit"
@@ -178,10 +180,10 @@ class RocketRenderer:
             points = [self._to_screen(x, y) for x, y in self._trail]
             pygame.draw.aalines(self.surface, (255, 255, 255), False, points)
 
-    def _draw_rocket(self, simulator: RocketSimulator, throttles: Sequence[float]) -> None:
-        state = simulator.state()
-        rocket = simulator.rocket
-        rocket_height = rocket.body.height - min(leg.tip[1] for leg in rocket.legs)
+    def _draw_rocket(self, rocket_simulator: RocketSimulator, throttles: Sequence[float]) -> None:
+        state = rocket_simulator.state()
+        rocket_spec = rocket_simulator.rocket_spec
+        rocket_height = rocket_spec.body.height - min(leg.tip[1] for leg in rocket_spec.legs)
         pixels_per_meter = max(self._pixels_per_meter, MIN_ROCKET_PX / rocket_height)
         cx, cy = self._to_screen(state.x, state.y)
 
@@ -192,13 +194,13 @@ class RocketRenderer:
                 cy - (point[1] - state.y) * pixels_per_meter,
             )
 
-        for nozzle, throttle in zip(rocket.nozzles, throttles, strict=True):
+        for nozzle, throttle in zip(rocket_spec.nozzles, throttles, strict=True):
             if throttle <= 0.01:
                 continue
             length = FLAME_LENGTH.get(nozzle.name, SIDE_FLAME_LENGTH)
             width = FLAME_WIDTH.get(nozzle.name, SIDE_FLAME_WIDTH)
-            origin = simulator.point_to_world(nozzle.position)
-            dx, dy = simulator.direction_to_world(nozzle.direction)
+            origin = rocket_simulator.point_to_world(nozzle.position)
+            dx, dy = rocket_simulator.direction_to_world(nozzle.direction)
             exhaust = (-dx, -dy)  # the exhaust leaves opposite to the push
             flicker = random.uniform(0.85, 1.15)
             for fraction, color in ((1.0, FLAME_OUTER), (0.55, FLAME_INNER)):
@@ -207,7 +209,7 @@ class RocketRenderer:
                 )
                 pygame.draw.polygon(self.surface, color, [to_screen(p) for p in flame])
 
-        for name, corners in simulator.shapes():
+        for name, corners in rocket_simulator.shapes():
             points = [to_screen(p) for p in corners]
             pygame.draw.polygon(self.surface, PART_COLORS.get(name, TEXT), points)
             pygame.draw.polygon(self.surface, (20, 20, 24), points, width=1)
@@ -254,13 +256,13 @@ class RocketRenderer:
 
     def _draw_outcome(self, info: dict[str, Any]) -> None:
         outcome = info["outcome"]
-        color = LANDED_COLOR if outcome == "landed" else FAILED_COLOR
-        # Centered in the space to the right of the status panel, one failed check per line.
+        color = LANDED_COLOR if outcome == Outcome.LANDED else FAILED_COLOR
+        # Centered in the space to the right of the status panel, one failure per line.
         center_x = (STATUS_PANEL_RIGHT + WIDTH) / 2
-        title = self._title_font.render(OUTCOME_TITLES.get(outcome, outcome), True, color)
+        title = self._title_font.render(OUTCOME_TITLES[outcome], True, color)
         self.surface.blit(title, (center_x - title.get_width() / 2, 30))
-        for i, check in enumerate(info.get("failed_checks", [])):
-            text = self._font.render(check, True, TEXT)
+        for i, reason in enumerate(describe_failures(info["touchdown"], info["failed_checks"])):
+            text = self._font.render(reason, True, TEXT)
             self.surface.blit(text, (center_x - text.get_width() / 2, 84 + 22 * i))
 
     def _text(

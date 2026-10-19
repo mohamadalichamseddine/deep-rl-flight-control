@@ -1,5 +1,6 @@
 """Run a controller on a fixed test set of starting conditions and measure how it lands."""
 
+import math
 import statistics
 from collections import Counter
 from collections.abc import Callable
@@ -8,7 +9,11 @@ from typing import Any
 
 import numpy as np
 
-from rocketlander.environment.rocket_landing_env import RocketLandingEnv
+from rocketlander.environment.landing_judge import LandingCheck, parts_other_than_legs
+from rocketlander.environment.outcome import Outcome
+from rocketlander.environment.rocket_landing_env import RocketLandingEnv, observation_to_state
+from rocketlander.rocket.rocket_simulator import RocketSimulator, Touchdown
+from rocketlander.rocket.rocket_state import RocketState
 
 # Test seeds start far from the small seeds used in training, so the two never overlap.
 FIRST_TEST_SEED = 1_000_000
@@ -24,9 +29,9 @@ def seed_for_test_episode(episode: int) -> int:
 @dataclass
 class EpisodeResult:
     seed: int
-    outcome: str
-    failed_checks: list[str]
-    touchdown: dict[str, float] | None  # x, vx, vy, tilt_deg, spin_deg_s just before contact
+    outcome: Outcome
+    failed_checks: list[LandingCheck]
+    touchdown: Touchdown | None  # the state just before contact, and the parts that touched
     duration_s: float
     fuel_used: float  # seconds of full main-engine thrust used (side nozzles count by thrust)
     trajectory: list[tuple[float, float]] = field(repr=False)  # center of mass (x, y)
@@ -35,30 +40,29 @@ class EpisodeResult:
 def run_episode(env: RocketLandingEnv, controller: Controller, seed: int) -> EpisodeResult:
     """Fly one episode from the start given by ``seed``, with the controller deciding."""
     observation, _ = env.reset(seed=seed)
-    trajectory = [(float(observation[0]), float(observation[1]))]
-    thrusts = np.array([n.max_thrust for n in env.rocket.nozzles])
+    state = observation_to_state(observation)
+    trajectory = [(state.x, state.y)]
     fuel_used, steps, done = 0.0, 0, False
     while not done:
-        action = controller(observation)
-        throttles = (np.clip(action, -1.0, 1.0) + 1.0) / 2.0
-        fuel_used += float(throttles @ thrusts) / thrusts.max() * env.config.dt
-        observation, _, terminated, truncated, info = env.step(action)
-        trajectory.append((float(observation[0]), float(observation[1])))
+        observation, _, terminated, truncated, info = env.step(controller(observation))
+        state = observation_to_state(observation)
+        trajectory.append((state.x, state.y))
+        fuel_used += info["fuel_used"]
         steps += 1
         done = terminated or truncated
     return EpisodeResult(
         seed=seed,
         outcome=info["outcome"],
-        failed_checks=info.get("failed_checks", []),
-        touchdown=info.get("touchdown"),
-        duration_s=steps * env.config.dt,
+        failed_checks=info["failed_checks"],
+        touchdown=info["touchdown"],
+        duration_s=steps * env.env_config.dt,
         fuel_used=fuel_used,
         trajectory=trajectory,
     )
 
 
 def run_test_set(
-    controller: Controller, env: RocketLandingEnv, episodes: int = 500
+    controller: Controller, env: RocketLandingEnv, episodes: int
 ) -> list[EpisodeResult]:
     """Fly the level's test set: test episodes 0 to ``episodes - 1``."""
     return [run_episode(env, controller, seed_for_test_episode(i)) for i in range(episodes)]
@@ -68,9 +72,13 @@ def summarize(results: list[EpisodeResult]) -> dict[str, Any]:
     """The evaluation metrics: landing rate, why the others failed, and touchdown quality."""
     n = len(results)
     touchdowns = [r.touchdown for r in results if r.touchdown is not None]
-    failed = Counter(
-        check.rsplit(" ", 4)[0] for r in results for check in r.failed_checks
-    )  # e.g. "vertical speed 8.00 > 1 m/s" -> "vertical speed"
+    failed = Counter(check.name for r in results for check in r.failed_checks)
+    failed.update(
+        f"{part} touched the ground"
+        for touchdown in touchdowns
+        for part in parts_other_than_legs(touchdown)
+    )
+    contacts = [touchdown.state for touchdown in touchdowns]
 
     def spread(values: list[float]) -> dict[str, float]:
         if not values:
@@ -83,33 +91,35 @@ def summarize(results: list[EpisodeResult]) -> dict[str, Any]:
 
     return {
         "episodes": n,
-        "landing_rate": sum(r.outcome == "landed" for r in results) / n,
+        "landing_rate": sum(r.outcome == Outcome.LANDED for r in results) / n,
         "outcomes": dict(Counter(r.outcome for r in results)),
         "failed_checks": dict(failed),
         "touchdown": {
-            "off center [m]": spread([abs(t["x"]) for t in touchdowns]),
-            "horizontal speed [m/s]": spread([abs(t["vx"]) for t in touchdowns]),
-            "vertical speed [m/s]": spread([abs(t["vy"]) for t in touchdowns]),
-            "tilt [deg]": spread([abs(t["tilt_deg"]) for t in touchdowns]),
-            "spin [deg/s]": spread([abs(t["spin_deg_s"]) for t in touchdowns]),
+            "off center [m]": spread([abs(s.x) for s in contacts]),
+            "horizontal speed [m/s]": spread([abs(s.vx) for s in contacts]),
+            "vertical speed [m/s]": spread([abs(s.vy) for s in contacts]),
+            "tilt [deg]": spread([math.degrees(abs(s.tilt)) for s in contacts]),
+            "spin [deg/s]": spread([math.degrees(abs(s.spin)) for s in contacts]),
         },
         "duration [s]": spread([r.duration_s for r in results]),
         "fuel [s of full thrust]": spread([r.fuel_used for r in results]),
     }
 
 
-def can_stop_before_the_ground(env: RocketLandingEnv, observation: np.ndarray) -> bool:
+def can_stop_before_the_ground(rocket_simulator: RocketSimulator, state: RocketState) -> bool:
     """Whether full main thrust could stop the fall before the legs reach the ground.
 
     A start that fails this is impossible for any controller, so it doesn't belong in a
     test set.
     """
-    y, vy = float(observation[1]), float(observation[3])
-    if vy >= 0:
+    if state.vy >= 0:
         return True
-    gravity = env.simulator.gravity
-    braking = env.rocket.nozzle("main").max_thrust / env.simulator.mass - gravity  # [m/s²]
-    return braking > 0 and vy**2 / (2 * braking) < y - env.y_when_standing
+    main_thrust = rocket_simulator.rocket_spec.get_nozzle("main").max_thrust
+    braking = main_thrust / rocket_simulator.mass - rocket_simulator.gravity  # [m/s²]
+    if braking <= 0:
+        return False
+    stopping_distance = state.vy**2 / (2 * braking)
+    return stopping_distance < state.y - rocket_simulator.y_when_standing
 
 
 def format_summary(summary: dict[str, Any]) -> str:

@@ -55,7 +55,7 @@ class SB3PolicyAdapter(ActorCriticPolicy):
     Choose the layer sizes with ``policy_kwargs={"hidden_sizes": [64, 64]}``.
     """
 
-    def __init__(self, *args, hidden_sizes: Sequence[int] = (64, 64), **kwargs) -> None:
+    def __init__(self, *args, hidden_sizes: Sequence[int], **kwargs) -> None:
         self.hidden_sizes = tuple(hidden_sizes)  # set first: the parent builds the network
         super().__init__(*args, **kwargs)
 

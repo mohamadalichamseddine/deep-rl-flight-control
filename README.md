@@ -33,7 +33,8 @@ Results stay on your computer, in `runs/` (not committed):
 ```
 runs/
   training/<experiment>/seed<N>/level<N>/   best_network.zip, final_network.zip, checkpoints/,
-                                            config.json, env_config.yaml, training.log, tensorboard_1/
+                                            train_config.json, env_config.json, rocket_spec.json,
+                                            training.log, tensorboard_1/
   test/pd/                                  tested_on_level<N>.json and .png
   test/<experiment>/seed<N>/level<N>/       best_network_tested_on_level<N>.json and .png
 ```
@@ -52,8 +53,9 @@ same folders:
 | `evaluation/` | measuring any controller on the fixed test sets |
 | `visualization/` | drawing flights: the live window and video files |
 
-Settings live in `configs/`: `rocket/` (the rocket's shape and engines), `env/` (landing
-rules, rewards, starting conditions), and `train/` (PPO training settings).
+Settings live in `configs/`: `rocket/` (the rocket's shape and engines), `env/` (gravity,
+time step, landing rules, rewards, starting conditions), `pd/` (the PD autopilot's gains), and
+`train/` (PPO training settings). `src/rocketlander/config_files.py` says where each file is.
 
 ## Development
 

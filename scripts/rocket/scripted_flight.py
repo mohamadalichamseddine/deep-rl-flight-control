@@ -13,8 +13,10 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 
-from rocketlander.rocket.rocket_simulator import STANDARD_GRAVITY, RocketSimulator
-from rocketlander.rocket.rocket_spec import load_rocket
+from rocketlander.config_files import ENV_CONFIG_FILE, ROCKET_SPEC_FILE
+from rocketlander.environment.env_config import build_env_config
+from rocketlander.rocket.rocket_simulator import RocketSimulator
+from rocketlander.rocket.rocket_spec import build_rocket_spec
 from rocketlander.rocket.rocket_state import RocketState
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -25,10 +27,15 @@ def main() -> None:
     parser.add_argument("--show", action="store_true", help="open the plot in a window")
     args = parser.parse_args()
 
-    rocket = load_rocket(ROOT / "configs" / "rocket" / "r100.yaml")
-    simulator = RocketSimulator(rocket)
-    simulator.reset(RocketState(x=0.0, y=50.0, vx=0.0, vy=0.0))
-    hover = simulator.mass * STANDARD_GRAVITY / rocket.nozzle("main").max_thrust
+    rocket_spec = build_rocket_spec(ROCKET_SPEC_FILE)
+    env_config = build_env_config(ENV_CONFIG_FILE)
+    rocket_simulator = RocketSimulator(
+        rocket_spec, gravity=env_config.gravity, dt=env_config.dt, substeps=env_config.substeps
+    )
+    rocket_simulator.reset(RocketState(x=0.0, y=50.0, vx=0.0, vy=0.0))
+    hover = (
+        rocket_simulator.mass * rocket_simulator.gravity / rocket_spec.get_nozzle("main").max_thrust
+    )
 
     # (duration [s], throttles [main, left, right], what happens)
     segments = [
@@ -43,14 +50,14 @@ def main() -> None:
         (2.0, (hover, 0.0, 0.0), "hover, coasting right"),
     ]
 
-    times, states, commands = [0.0], [simulator.state()], []
+    times, states, commands = [0.0], [rocket_simulator.state()], []
     print(f"hover throttle = {hover:.4f}\n")
     print(f"{'t [s]':>6} {'x [m]':>7} {'y [m]':>7} {'vx':>6} {'vy':>6} {'tilt [deg]':>10}  segment")
     for duration, throttles, label in segments:
-        for _ in range(round(duration / simulator.dt)):
+        for _ in range(round(duration / rocket_simulator.dt)):
             commands.append(throttles)
-            states.append(simulator.step(throttles))
-            times.append(times[-1] + simulator.dt)
+            states.append(rocket_simulator.step(throttles))
+            times.append(times[-1] + rocket_simulator.dt)
         s = states[-1]
         print(
             f"{times[-1]:6.1f} {s.x:7.2f} {s.y:7.2f} {s.vx:6.2f} {s.vy:6.2f} "
@@ -59,7 +66,7 @@ def main() -> None:
 
     path = ROOT / "runs" / "scripted_flight.png"
     path.parent.mkdir(exist_ok=True)
-    _plot(times, states, commands, simulator.dt, path)
+    _plot(times, states, commands, rocket_simulator.dt, path)
     print(f"\nplot saved to {path}")
     if args.show:
         plt.show()

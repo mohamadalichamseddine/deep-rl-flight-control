@@ -1,11 +1,12 @@
 import pytest
 
-from rocketlander.environment.env_config import StartRanges, load_env_config
-from rocketlander.environment.rocket_landing_env import DEFAULT_ENV_CONFIG
+from rocketlander.config_files import ENV_CONFIG_FILE
+from rocketlander.environment.env_config import StartRanges, build_env_config
 
 
 def test_default_config_loads_three_levels() -> None:
-    config = load_env_config(DEFAULT_ENV_CONFIG)
+    config = build_env_config(ENV_CONFIG_FILE)
+    assert config.gravity == 9.81
     assert len(config.levels) == 3
     assert config.levels[0].altitude == (50.0, 80.0)
 

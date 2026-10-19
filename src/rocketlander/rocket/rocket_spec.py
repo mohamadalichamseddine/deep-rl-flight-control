@@ -9,7 +9,7 @@ import math
 from dataclasses import dataclass
 from pathlib import Path
 
-from rocketlander.config_loader import load_config
+import yaml
 
 
 @dataclass(frozen=True)
@@ -74,15 +74,34 @@ class RocketSpec:
                 "leg tips must reach below the base (y < 0), so the engine clears the ground"
             )
 
-    def nozzle(self, name: str) -> Nozzle:
+    def get_nozzle(self, name: str) -> Nozzle:
         for nozzle in self.nozzles:
             if nozzle.name == name:
                 return nozzle
         raise KeyError(f"no nozzle named {name!r}; nozzles are {[n.name for n in self.nozzles]}")
 
 
-def load_rocket(path: str | Path) -> RocketSpec:
-    return load_config(path, RocketSpec)
+def build_rocket_spec(path: str | Path) -> RocketSpec:
+    """Read a rocket config file (YAML) and build the rocket's description from it."""
+    with Path(path).open(encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+
+    body = config["body"]
+    engine_block = config["engine_block"]
+    return RocketSpec(
+        body=Body(height=body["height"], width=body["width"], mass=body["mass"]),
+        engine_block=EngineBlock(height=engine_block["height"], mass=engine_block["mass"]),
+        nozzles=tuple(
+            Nozzle(
+                name=nozzle["name"],
+                position=tuple(nozzle["position"]),
+                direction=tuple(nozzle["direction"]),
+                max_thrust=nozzle["max_thrust"],
+            )
+            for nozzle in config["nozzles"]
+        ),
+        legs=tuple(Leg(top=tuple(leg["top"]), tip=tuple(leg["tip"])) for leg in config["legs"]),
+    )
 
 
 def _require_positive(**values: float) -> None:

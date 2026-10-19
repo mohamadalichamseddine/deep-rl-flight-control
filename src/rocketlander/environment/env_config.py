@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from rocketlander.config_loader import load_config
+import yaml
 
 Range = tuple[float, float]  # [min, max]
 
@@ -62,6 +62,7 @@ class StartRanges:
 
 @dataclass(frozen=True)
 class EnvConfig:
+    gravity: float  # [m/s²]
     dt: float  # control step [s]
     substeps: int  # Box2D steps per control step
     landing: LandingCriteria
@@ -70,5 +71,27 @@ class EnvConfig:
     levels: tuple[StartRanges, ...]
 
 
-def load_env_config(path: str | Path) -> EnvConfig:
-    return load_config(path, EnvConfig)
+def build_env_config(path: str | Path) -> EnvConfig:
+    """Read an environment config file (YAML) and build the settings from it."""
+    with Path(path).open(encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+
+    return EnvConfig(
+        gravity=config["gravity"],
+        dt=config["dt"],
+        substeps=config["substeps"],
+        landing=LandingCriteria(**config["landing"]),
+        limits=FlightLimits(**config["limits"]),
+        reward=RewardSettings(**config["reward"]),
+        levels=tuple(
+            StartRanges(
+                altitude=tuple(level["altitude"]),
+                x=tuple(level["x"]),
+                vx=tuple(level["vx"]),
+                vy=tuple(level["vy"]),
+                tilt_deg=tuple(level["tilt_deg"]),
+                spin_deg_s=tuple(level["spin_deg_s"]),
+            )
+            for level in config["levels"]
+        ),
+    )

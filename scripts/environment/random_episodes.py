@@ -8,7 +8,10 @@ import argparse
 import time
 from collections import Counter
 
+from rocketlander.config_files import ENV_CONFIG_FILE, ROCKET_SPEC_FILE
+from rocketlander.environment.env_config import build_env_config
 from rocketlander.environment.rocket_landing_env import RocketLandingEnv
+from rocketlander.rocket.rocket_spec import build_rocket_spec
 
 
 def main() -> None:
@@ -17,7 +20,9 @@ def main() -> None:
     parser.add_argument("--level", type=int, default=0)
     args = parser.parse_args()
 
-    env = RocketLandingEnv(level=args.level)
+    rocket_spec = build_rocket_spec(ROCKET_SPEC_FILE)
+    env_config = build_env_config(ENV_CONFIG_FILE)
+    env = RocketLandingEnv(rocket_spec, env_config, level=args.level, render_mode=None)
     env.action_space.seed(0)
     outcomes, steps, rewards = Counter(), 0, []
     start = time.perf_counter()
@@ -36,7 +41,7 @@ def main() -> None:
     print(f"{args.episodes} episodes at level {args.level}, random actions\n")
     for outcome, count in outcomes.most_common():
         print(f"  {outcome:<18} {count:>5}  ({count / args.episodes:.0%})")
-    print(f"\n  mean episode length  {steps / args.episodes * env.config.dt:.1f} s")
+    print(f"\n  mean episode length  {steps / args.episodes * env.env_config.dt:.1f} s")
     print(f"  mean total reward    {sum(rewards) / len(rewards):.1f}")
     print(f"  speed                {steps / elapsed:,.0f} steps/s on one core")
 
