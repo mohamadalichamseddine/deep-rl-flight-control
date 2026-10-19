@@ -6,7 +6,8 @@ Re-flies a test episode exactly as the evaluation flew it: same seed, same contr
     uv run python scripts/evaluation/watch_controller.py --level 2 --test-episode 137
     uv run python scripts/evaluation/watch_controller.py --random  # new random starts
     uv run python scripts/evaluation/watch_controller.py --flights 3 --record runs/pd_demo.mp4
-    uv run python scripts/evaluation/watch_controller.py --network runs/ppo/<run>/best_network.zip
+    uv run python scripts/evaluation/watch_controller.py \\
+        --network runs/training/<experiment>/seed0/level0/best_network.zip
 """
 
 import argparse

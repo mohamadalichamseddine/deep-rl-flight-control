@@ -26,6 +26,12 @@ def test_a_tiny_training_run_saves_everything(tmp_path) -> None:
 
     train(config, tmp_path)
 
-    for name in ("best_network.zip", "final_network.zip", "config.json"):
+    for name in (
+        "best_network.zip",
+        "final_network.zip",
+        "config.json",
+        "env_config.yaml",
+        "training.log",
+    ):
         assert (tmp_path / name).exists(), name
     assert list(tmp_path.glob("tensorboard_*"))
