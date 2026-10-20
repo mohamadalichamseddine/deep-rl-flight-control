@@ -23,10 +23,15 @@ from the best network of the level below, with the same experiment and seed.
 uv run python scripts/ppo/train_ppo.py --experiment my-experiment             # level 0, seed 0
 uv run python scripts/ppo/train_ppo.py --experiment my-experiment --level 1   # continues level 0
 uv run python scripts/ppo/train_ppo.py --experiment my-experiment --level 2   # continues level 1
-uv run tensorboard --logdir runs/training                                     # training curves
+uv run tensorboard --logdir runs/training                                     # live curves
 uv run python scripts/evaluation/evaluate_controller.py --network runs/training/my-experiment/seed0/level2/best_network.zip
 uv run python scripts/evaluation/compare_controllers.py --level 2             # vs. the PD autopilot
 ```
+
+Each level folder gets `metrics.csv`, one row per round (every rocket flies `n_steps`, then the
+network is updated): the average reward and landing rate of the training and validation
+flights, and the actor, critic and total losses. `training_curves.png` plots them, redrawn
+after every validation, so it can be opened while training runs.
 
 Results stay on your computer, in `runs/` (not committed):
 
@@ -34,7 +39,8 @@ Results stay on your computer, in `runs/` (not committed):
 runs/
   training/<experiment>/seed<N>/level<N>/   best_network.zip, final_network.zip, checkpoints/,
                                             train_config.json, env_config.json, rocket_spec.json,
-                                            training.log, tensorboard_1/
+                                            training.log, metrics.csv, training_curves.png,
+                                            tensorboard/
   test/pd/                                  tested_on_level<N>.json and .png
   test/<experiment>/seed<N>/level<N>/       best_network_tested_on_level<N>.json and .png
 ```
@@ -128,6 +134,6 @@ includes 120 core-hours per month: about 7.5 hours on 16 cores.
    runs. Delete it once the results are copied (`gh codespace delete`): a stopped codespace
    still counts toward the 15 GB of free storage.
 
-`--parallel-rockets` also changes the batch: each iteration collects parallel rockets ×
+`--parallel-rockets` also changes the batch: each round collects parallel rockets ×
 `n_steps` (1,024) steps, so 16 rockets make half as many network updates for the same number of
 steps as 8.

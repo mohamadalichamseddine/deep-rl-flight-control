@@ -34,6 +34,7 @@ class EpisodeResult:
     failed_checks: list[LandingCheck]
     touchdown: Touchdown | None  # the state just before contact, and the parts that touched
     duration_s: float
+    total_reward: float  # the rewards of every step, summed
     fuel_used: float  # seconds of full main-engine thrust used (side nozzles count by thrust)
     trajectory: list[tuple[float, float]] = field(repr=False)  # center of mass (x, y)
 
@@ -43,11 +44,12 @@ def run_episode(env: RocketLandingEnv, controller: Controller, seed: int) -> Epi
     observation, _ = env.reset(seed=seed)
     state = observation_to_state(observation)
     trajectory = [(state.x, state.y)]
-    fuel_used, steps, done = 0.0, 0, False
+    total_reward, fuel_used, steps, done = 0.0, 0.0, 0, False
     while not done:
-        observation, _, terminated, truncated, info = env.step(controller(observation))
+        observation, reward, terminated, truncated, info = env.step(controller(observation))
         state = observation_to_state(observation)
         trajectory.append((state.x, state.y))
+        total_reward += reward
         fuel_used += info["fuel_used"]
         steps += 1
         done = terminated or truncated
@@ -57,6 +59,7 @@ def run_episode(env: RocketLandingEnv, controller: Controller, seed: int) -> Epi
         failed_checks=info["failed_checks"],
         touchdown=info["touchdown"],
         duration_s=steps * env.env_config.dt,
+        total_reward=total_reward,
         fuel_used=fuel_used,
         trajectory=trajectory,
     )

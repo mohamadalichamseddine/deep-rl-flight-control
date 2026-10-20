@@ -44,6 +44,14 @@ def test_run_episode_records_the_flight(env: RocketLandingEnv) -> None:
     assert result.fuel_used == 0.0
     assert result.duration_s == pytest.approx(0.02 * (len(result.trajectory) - 1))
 
+    env.reset(seed=seed_for_test_episode(0))
+    rewards, done = [], False
+    while not done:
+        _, reward, terminated, truncated, _ = env.step(ALL_OFF)
+        rewards.append(reward)
+        done = terminated or truncated
+    assert result.total_reward == pytest.approx(sum(rewards))
+
 
 def test_fuel_counts_seconds_of_full_main_thrust(env: RocketLandingEnv) -> None:
     half_main = np.array([0.0, -1.0, -1.0], dtype=np.float32)  # main at 50%
@@ -117,6 +125,7 @@ def _result(
         failed_checks=failed_checks,
         touchdown=Touchdown(contact, frozenset({"leg"})) if touchdown else None,
         duration_s=10.0,
+        total_reward=50.0,
         fuel_used=5.0,
         trajectory=[(0.0, 50.0), (0.0, 1.5)],
     )

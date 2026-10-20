@@ -9,10 +9,8 @@ from matplotlib.patches import Rectangle
 from rocketlander.environment.env_config import LandingCriteria
 from rocketlander.environment.outcome import Outcome
 from rocketlander.evaluation.evaluation import EpisodeResult
+from rocketlander.visualization.plot_style import SURFACE, TEXT, TEXT_SECONDARY, style_axes
 
-SURFACE = "#fcfcfb"
-TEXT, TEXT_SECONDARY = "#0b0b0b", "#52514e"
-GRID = "#e4e3df"
 SAFE_ZONE = "#ecebe7"
 LANDED, FAILED = "#0ca30c", "#d03b3b"  # status colors: good, critical
 
@@ -59,7 +57,7 @@ def plot_evaluation(
     )
 
     for ax in (paths, position, attitude):
-        _style(ax)
+        style_axes(ax)
         handles, labels = ax.get_legend_handles_labels()
         if handles:
             legend = ax.legend(frameon=False, labelcolor=TEXT_SECONDARY, loc="best")
@@ -106,17 +104,3 @@ def _scatter_with_limits(ax, points, x_limit, y_range, title, xlabel, ylabel) ->
     # Always show the whole safe zone with some room around it, even if all dots are inside.
     ax.update_datalim([(-1.5 * x_limit, low - 0.25 * (high - low)), (1.5 * x_limit, 1.5 * high)])
     ax.autoscale_view()
-
-
-def _style(ax) -> None:
-    ax.set_facecolor(SURFACE)
-    ax.grid(color=GRID, linewidth=0.8)
-    ax.set_axisbelow(True)
-    ax.title.set_color(TEXT)
-    for label in (ax.xaxis.label, ax.yaxis.label):
-        label.set_color(TEXT_SECONDARY)
-    ax.tick_params(colors=TEXT_SECONDARY)
-    for side in ("top", "right"):
-        ax.spines[side].set_visible(False)
-    for side in ("left", "bottom"):
-        ax.spines[side].set_color(GRID)
