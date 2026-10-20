@@ -1,6 +1,5 @@
 # PPO training settings. The `ppo` block is passed to stable_baselines3.PPO as is.
 
-level: 0                    # difficulty level of the training starts
 total_steps: 5000000        # 20 ms control steps, summed over all rockets
 parallel_rockets: 8         # rockets flying in parallel, one per CPU core
 seed: 0

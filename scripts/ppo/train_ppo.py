@@ -9,10 +9,11 @@ tries, e.g. graded-touchdown-penalty.
 Level 0 starts from random weights. Each higher level continues from the best network of the
 level below, in the same experiment and seed, so train the levels in order:
 
-    uv run python scripts/ppo/train_ppo.py --experiment my-experiment            # level 0, seed 0
+    uv run python scripts/ppo/train_ppo.py --experiment my-experiment --level 0  # seed 0
     uv run python scripts/ppo/train_ppo.py --experiment my-experiment --level 1  # continues level 0
-    uv run python scripts/ppo/train_ppo.py --experiment my-experiment --seed 1
-    uv run python scripts/ppo/train_ppo.py --experiment my-experiment --parallel-rockets 16
+    uv run python scripts/ppo/train_ppo.py --experiment my-experiment --level 0 --seed 1
+    uv run python scripts/ppo/train_ppo.py --experiment my-experiment --level 0 \\
+        --parallel-rockets 16
 
 Settings: configs/train/ppo.yaml. Watch progress live:  uv run tensorboard --logdir runs/training
 """
@@ -33,7 +34,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--experiment", required=True, help="what this run tries, as a folder name")
     parser.add_argument("--config", default=TRAIN_CONFIG_FILE)
-    parser.add_argument("--level", type=int, choices=[0, 1, 2])
+    parser.add_argument("--level", type=int, choices=[0, 1, 2], required=True)
     parser.add_argument("--seed", type=int)
     parser.add_argument("--steps", type=int)
     parser.add_argument(
@@ -46,7 +47,6 @@ def main() -> None:
 
     train_config = build_train_config(args.config)
     overrides = {
-        "level": args.level,
         "seed": args.seed,
         "total_steps": args.steps,
         "parallel_rockets": args.parallel_rockets,
@@ -56,22 +56,22 @@ def main() -> None:
     )
 
     seed_dir = ROOT / "runs" / "training" / args.experiment / f"seed{train_config.seed}"
-    run_dir = seed_dir / f"level{train_config.level}"
+    run_dir = seed_dir / f"level{args.level}"
     if run_dir.exists():
         raise SystemExit(f"{run_dir} already exists: choose another --experiment, or delete it")
     start_from = None
-    if train_config.level > 0:
-        start_from = seed_dir / f"level{train_config.level - 1}" / "best_network.zip"
+    if args.level > 0:
+        start_from = seed_dir / f"level{args.level - 1}" / "best_network.zip"
         if not start_from.exists():
             raise SystemExit(
-                f"{start_from} not found: train level {train_config.level - 1} first, "
+                f"{start_from} not found: train level {args.level - 1} first, "
                 "with the same experiment and seed"
             )
 
     rocket_spec = build_rocket_spec(ROCKET_SPEC_FILE)
     env_config = build_env_config(ENV_CONFIG_FILE)
     print(f"experiment {args.experiment}")
-    train(train_config, rocket_spec, env_config, run_dir, start_from)
+    train(train_config, rocket_spec, env_config, args.level, run_dir, start_from)
 
 
 if __name__ == "__main__":

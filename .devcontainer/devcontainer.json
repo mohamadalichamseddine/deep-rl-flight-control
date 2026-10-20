@@ -1,5 +1,5 @@
-// How GitHub Codespaces sets up the cloud machine for this repo (see "Training on GitHub
-// Codespaces" in the README).
+// How GitHub Codespaces sets up the cloud machine for this repo (see
+// docs/training-on-codespaces.md).
 {
   "name": "rocketlander",
   "image": "mcr.microsoft.com/devcontainers/python:3.13",

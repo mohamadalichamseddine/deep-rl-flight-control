@@ -1,37 +1,103 @@
-# Autonomous Rocket Landing
-Autonomous rocket landing using deep reinforcement learning (PPO), neural networks, and physics simulation
+# Rocket Landing Controller with Deep Reinforcement Learning
 
-## Try it
+A 2D rocket, simulated with Box2D, learns to land on a pad. It is trained with PPO
+(Stable-Baselines3) using our own PyTorch network, and compared against a hand-written PD
+autopilot.
+
+## Setup
+
+Requires [uv](https://docs.astral.sh/uv/). In the project folder:
 
 ```powershell
-uv run python scripts/environment/fly_manually.py        # fly the rocket yourself (arrow keys)
-uv run python scripts/environment/fly_manually.py --flights 1 --record runs/my_flight.mp4
-uv run python scripts/evaluation/watch_controller.py --level 2  # watch the PD autopilot land
-uv run python scripts/evaluation/evaluate_controller.py  # test sets: results in runs/test/pd/
-uv run python scripts/rocket/draw_rocket.py --show       # the rocket as Box2D sees it
-uv run python scripts/rocket/scripted_flight.py --show   # a fixed command sequence, plotted
-uv run python scripts/environment/random_episodes.py     # random actions: env check and speed
+uv sync      # creates .venv/ with Python 3.13 and the exact versions pinned in uv.lock
 ```
 
-## Train and test a network
+Every command below starts with `uv run`, which runs it inside `.venv/` without activating it.
+
+## Try it (no training needed)
+
+```powershell
+uv run python scripts/environment/fly_manually.py              # fly the rocket yourself: arrow keys, Esc quits
+uv run python scripts/evaluation/watch_controller.py           # watch the PD autopilot land
+uv run python scripts/evaluation/watch_controller.py --level 2 # the same, from harder starts
+uv run python scripts/rocket/draw_rocket.py --show             # the rocket as Box2D sees it
+uv run python scripts/rocket/scripted_flight.py --show         # a fixed command sequence, plotted
+uv run python scripts/environment/random_episodes.py           # random actions: checks the environment and its speed
+```
+
+Levels 0, 1 and 2 are how hard the starting conditions are (height, speed, tilt; see
+`configs/env/default.yaml`). Add `--record runs/my_flight.mp4` to `fly_manually.py` or
+`watch_controller.py` to save the flights as a video.
+
+## Train a network
+
+### Where to train
+
+- **On your computer.** Training flies 8 rockets at once (`parallel_rockets` in
+  `configs/train/ppo.yaml`), ideally one per CPU core; with fewer cores, pass
+  `--parallel-rockets` with your number of cores. No GPU is needed: the network is small, and
+  most of the time goes into the physics. Keep the computer awake for the whole run, as sleep
+  pauses training.
+- **On GitHub Codespaces**, a cloud machine with up to 32 cores: see
+  [Training on GitHub Codespaces](docs/training-on-codespaces.md).
+
+Use the same `--parallel-rockets` for every level and seed of an experiment. It sets how many
+steps go into each network update, so runs with different values can't be compared.
+
+### Steps
 
 Each training run belongs to an experiment, named after what it tries (e.g.
-`graded-touchdown-penalty`). Level 0 starts from random weights; each higher level continues
-from the best network of the level below, with the same experiment and seed.
+`graded-touchdown-penalty`). Train the levels in order: level 0 starts from random weights, and
+each higher level continues from the best network of the level below, with the same experiment
+and seed.
+
+1. Train level 0:
+
+   ```powershell
+   uv run python scripts/ppo/train_ppo.py --experiment my-experiment --level 0
+   ```
+
+2. When it finishes, watch its best network fly:
+
+   ```powershell
+   uv run python scripts/evaluation/watch_controller.py --network runs/training/my-experiment/seed0/level0/best_network.zip --level 0
+   ```
+
+3. Train levels 1 and 2:
+
+   ```powershell
+   uv run python scripts/ppo/train_ppo.py --experiment my-experiment --level 1
+   uv run python scripts/ppo/train_ppo.py --experiment my-experiment --level 2
+   ```
+
+Other options: `--seed 1` trains another seed of the same experiment, and `--steps` changes the
+number of training steps (5,000,000 by default). Ctrl+C stops a run early; it still saves
+`final_network.zip` and the training curves.
+
+### Watching progress
+
+- **Console and `training.log`:** every 250,000 steps, the network flies the 50 validation
+  starts without exploration noise. Each line shows the landing rate, the average reward, and
+  how the flights ended. The best network so far is saved as `best_network.zip`.
+- **`training_curves.png`**, in the level folder and redrawn after every validation: the average
+  reward and the landing rate of the training and validation flights, and the actor, critic and
+  total losses. The numbers are in `metrics.csv`, one row per round (every rocket flies
+  `n_steps` steps, then the network is updated).
+- **TensorBoard**, live: run `uv run tensorboard --logdir runs/training`, then open
+  http://localhost:6006.
+
+## Test a network
+
+Once level 2 is trained, fly its best network on the test sets: 500 fixed starts per level,
+never flown during training, and the same for every controller. It tests all three levels; add
+`--level 2` to test only one.
 
 ```powershell
-uv run python scripts/ppo/train_ppo.py --experiment my-experiment             # level 0, seed 0
-uv run python scripts/ppo/train_ppo.py --experiment my-experiment --level 1   # continues level 0
-uv run python scripts/ppo/train_ppo.py --experiment my-experiment --level 2   # continues level 1
-uv run tensorboard --logdir runs/training                                     # live curves
 uv run python scripts/evaluation/evaluate_controller.py --network runs/training/my-experiment/seed0/level2/best_network.zip
-uv run python scripts/evaluation/compare_controllers.py --level 2             # vs. the PD autopilot
+uv run python scripts/evaluation/compare_controllers.py --level 2    # side by side with the other tested controllers
 ```
 
-Each level folder gets `metrics.csv`, one row per round (every rocket flies `n_steps`, then the
-network is updated): the average reward and landing rate of the training and validation
-flights, and the actor, critic and total losses. `training_curves.png` plots them, redrawn
-after every validation, so it can be opened while training runs.
+## Results
 
 Results stay on your computer, in `runs/` (not committed):
 
@@ -65,75 +131,15 @@ time step, landing rules, rewards, starting conditions), `pd/` (the PD autopilot
 
 ## Development
 
-Requires [uv](https://docs.astral.sh/uv/). It creates the virtual environment in `.venv/` and
-installs the exact versions pinned in `uv.lock`, and it downloads Python 3.13 if needed.
-
 ```powershell
-uv sync                      # create .venv/ and install dependencies
 uv run pytest                # run the tests
 uv run ruff check .          # lint
 uv run ruff format .         # format
 ```
 
-`uv run <command>` runs inside `.venv/` without activating it. To activate it in your shell instead:
+To activate `.venv/` in your shell instead of using `uv run`:
 
 ```powershell
 .venv\Scripts\Activate.ps1   # PowerShell (Windows)
 source .venv/bin/activate    # bash/zsh (Linux, macOS)
 ```
-
-## Training on GitHub Codespaces
-
-Training spends most of its time computing physics, so more CPU cores make it faster. A
-[GitHub Codespace](https://docs.github.com/en/codespaces) is a cloud machine with 2 to 32 cores,
-set up from `.devcontainer/devcontainer.json` (Python 3.13, uv, `uv sync`). The free plan
-includes 120 core-hours per month: about 7.5 hours on 16 cores.
-
-1. Create a codespace on a branch, with 16 cores, either:
-   - on github.com: **Code → Codespaces → ⋯ → New with options**, or
-   - from your terminal; `create` asks which machine type to use (the first time, run
-     `gh auth refresh -h github.com -s codespace`):
-
-     ```powershell
-     gh codespace create -R mohamadalichamseddine/deep-rl-flight-control -b main --idle-timeout 60m
-     gh codespace ssh
-     ```
-
-2. Start training in the codespace's terminal. `nohup` keeps it running if you disconnect:
-
-   ```bash
-   cd /workspaces/deep-rl-flight-control
-   mkdir -p runs
-   nohup uv run python scripts/ppo/train_ppo.py --experiment my-experiment --parallel-rockets 16 > runs/nohup.out 2>&1 &
-   tail -f runs/nohup.out    # watch it; Ctrl+C stops watching, not training
-   ```
-
-   To train levels 0, 1 and 2 one after the other (each starts only if the one before
-   succeeded):
-
-   ```bash
-   nohup sh -c "uv run python scripts/ppo/train_ppo.py --experiment my-experiment --parallel-rockets 16 --level 0 &&
-                uv run python scripts/ppo/train_ppo.py --experiment my-experiment --parallel-rockets 16 --level 1 &&
-                uv run python scripts/ppo/train_ppo.py --experiment my-experiment --parallel-rockets 16 --level 2" > runs/nohup.out 2>&1 &
-   ```
-
-   The codespace stops after the idle timeout (at most 240 minutes) without terminal activity,
-   which ends training: keep `tail -f` open, or set a timeout longer than the run.
-
-3. Copy the results to your computer. They exist only in the codespace, because `runs/` is not
-   committed:
-
-   ```powershell
-   mkdir -Force runs/training
-   gh codespace cp -r remote:/workspaces/deep-rl-flight-control/runs/training/my-experiment runs/training/
-   ```
-
-   Or right-click the folder in the codespace's file explorer → **Download**.
-
-4. Stop the codespace when you're done (`gh codespace stop`), as it uses core-hours while it
-   runs. Delete it once the results are copied (`gh codespace delete`): a stopped codespace
-   still counts toward the 15 GB of free storage.
-
-`--parallel-rockets` also changes the batch: each round collects parallel rockets ×
-`n_steps` (1,024) steps, so 16 rockets make half as many network updates for the same number of
-steps as 8.
