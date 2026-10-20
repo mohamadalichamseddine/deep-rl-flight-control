@@ -1,12 +1,12 @@
-"""Watch a controller fly in the live window: test episodes, or new random starts.
+"""Watch a controller fly in the live window, from new random starts or from the test set.
 
-Re-flies a test episode exactly as the evaluation flew it: same seed, same controller.
+With --test-episode, it re-flies test episodes exactly as the evaluation flew them: same seed,
+same controller.
 
-    uv run python scripts/evaluation/watch_controller.py          # PD, level 0, test episode 0 on
+    uv run python scripts/evaluation/watch_controller.py          # PD, level 0, random starts
     uv run python scripts/evaluation/watch_controller.py --level 2 --test-episode 137
-    uv run python scripts/evaluation/watch_controller.py --random  # new random starts
     uv run python scripts/evaluation/watch_controller.py --flights 3 --record runs/pd_demo.mp4
-    uv run python scripts/evaluation/watch_controller.py \\
+    uv run python scripts/evaluation/watch_controller.py --level 0 \\
         --network runs/training/<experiment>/seed0/level0/best_network.zip
 """
 
@@ -28,8 +28,11 @@ def main() -> None:
     parser.add_argument("--controller", default="pd", choices=CONTROLLERS)
     parser.add_argument("--network", help="a trained network (.zip); implies --controller network")
     parser.add_argument("--level", type=int, default=0, choices=[0, 1, 2])
-    parser.add_argument("--test-episode", type=int, default=0, help="first test episode to fly")
-    parser.add_argument("--random", action="store_true", help="random starts, not the test set")
+    parser.add_argument(
+        "--test-episode",
+        type=int,
+        help="fly the test set from this test episode on (default: new random starts)",
+    )
     parser.add_argument("--flights", type=int, help="stop after this many flights")
     parser.add_argument("--record", help="save the flights to this MP4 file")
     args = parser.parse_args()
@@ -49,8 +52,8 @@ def main() -> None:
     flights = 0
     try:
         while not env.window_closed and flights != args.flights:
-            episode = args.test_episode + flights
-            seed = None if args.random else seed_for_test_episode(episode)
+            episode = None if args.test_episode is None else args.test_episode + flights
+            seed = None if episode is None else seed_for_test_episode(episode)
             observation, _ = env.reset(seed=seed)
             if video:
                 video.add(env.environment_renderer.to_array())
@@ -62,7 +65,7 @@ def main() -> None:
                 done = terminated or truncated
             if done:
                 flights += 1
-                label = "random start" if args.random else f"test episode {episode}"
+                label = "random start" if episode is None else f"test episode {episode}"
                 reasons = "; ".join(describe_failures(info["touchdown"], info["failed_checks"]))
                 print(f"{label}: {info['outcome']}" + (f" ({reasons})" if reasons else ""))
                 if video:

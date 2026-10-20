@@ -20,7 +20,6 @@ from rocketlander.rocket.rocket_spec import RocketSpec
 
 def test_default_config_loads_with_ppo_settings() -> None:
     train_config = build_train_config(TRAIN_CONFIG_FILE)
-    assert train_config.level == 0
     assert train_config.parallel_rockets == 8
     assert isinstance(train_config.ppo["n_steps"], int)
     assert train_config.ppo["policy_kwargs"]["hidden_sizes"] == [64, 64]
@@ -65,7 +64,7 @@ def test_a_tiny_training_run_saves_everything(
         },
     )
 
-    train(train_config, rocket_spec, env_config, tmp_path, None)
+    train(train_config, rocket_spec, env_config, level=0, run_dir=tmp_path, start_from=None)
 
     for name in (
         "best_network.zip",

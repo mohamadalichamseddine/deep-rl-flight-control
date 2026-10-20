@@ -81,7 +81,9 @@ def main() -> None:
         failed = [r.seed - seed_for_test_episode(0) for r in results if r.outcome != Outcome.LANDED]
         if failed:
             shown = ", ".join(map(str, failed[:10])) + (" ..." if len(failed) > 10 else "")
-            print(f"failed test episodes (watch with watch_controller.py): {shown}")
+            print(
+                f"failed test episodes (watch with watch_controller.py --test-episode N): {shown}"
+            )
 
         out.mkdir(parents=True, exist_ok=True)
         (out / f"{name}.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")

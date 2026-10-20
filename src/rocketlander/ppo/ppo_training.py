@@ -35,7 +35,6 @@ TRAINING_FLIGHTS = 100
 
 @dataclass(frozen=True)
 class TrainConfig:
-    level: int
     total_steps: int
     parallel_rockets: int
     seed: int
@@ -138,10 +137,12 @@ def train(
     train_config: TrainConfig,
     rocket_spec: RocketSpec,
     env_config: EnvConfig,
+    level: int,
     run_dir: Path,
     start_from: Path | None,
 ) -> PPO:
-    """Train a network (or keep training ``start_from``) and save it in ``run_dir``.
+    """Train a network on the starts of ``level`` (or keep training ``start_from``) and save
+    it in ``run_dir``.
 
     Saves best_network.zip (best validation landing rate), final_network.zip, checkpoints/,
     the settings used (train_config.json, env_config.json, rocket_spec.json), training.log,
@@ -155,12 +156,11 @@ def train(
         (run_dir / f"{name}.json").write_text(json.dumps(asdict(value), indent=2), encoding="utf-8")
     log(
         run_dir,
-        f"training level {train_config.level}, seed {train_config.seed}, "
+        f"training level {level}, seed {train_config.seed}, "
         f"{train_config.total_steps:,} steps, {train_config.parallel_rockets} rockets in "
         "parallel, "
         + (f"continuing from {start_from}" if start_from else "starting from random weights"),
     )
-    level = train_config.level
     env = make_vec_env(
         lambda: ScaledObservation(
             RocketLandingEnv(rocket_spec, env_config, level=level, render_mode=None)

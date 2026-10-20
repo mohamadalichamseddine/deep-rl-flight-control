@@ -14,4 +14,5 @@ dist/
 runs/
 
 # Local project notes (not published)
-docs/
+docs/plan.md
+docs/project.md
