@@ -7,48 +7,14 @@ import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 
+from rocketlander.environment.action import action_to_throttles
 from rocketlander.environment.env_config import EnvConfig
 from rocketlander.environment.landing_judge import LandingJudge
 from rocketlander.environment.landing_reward import LandingReward
+from rocketlander.environment.observation import state_to_observation
 from rocketlander.rocket.rocket_simulator import RocketSimulator
 from rocketlander.rocket.rocket_spec import RocketSpec
 from rocketlander.rocket.rocket_state import RocketState
-
-
-def action_to_throttles(action: np.ndarray) -> np.ndarray:
-    """An action, one value in [-1, 1] per nozzle, as throttles in [0, 1]."""
-    return (np.clip(action, -1.0, 1.0) + 1.0) / 2.0
-
-
-def throttles_to_action(throttles: np.ndarray) -> np.ndarray:
-    """Throttles in [0, 1], one per nozzle, as an action in [-1, 1]."""
-    return (2.0 * throttles - 1.0).astype(np.float32)
-
-
-def state_to_observation(state: RocketState, mass: float) -> np.ndarray:
-    """The observation ``[x, y, vx, vy, sin(tilt), cos(tilt), spin, mass]``.
-
-    sin/cos avoids a jump when the tilt wraps around.
-    """
-    return np.array(
-        [
-            state.x,
-            state.y,
-            state.vx,
-            state.vy,
-            math.sin(state.tilt),
-            math.cos(state.tilt),
-            state.spin,
-            mass,
-        ],
-        dtype=np.float32,
-    )
-
-
-def observation_to_state(observation: np.ndarray) -> RocketState:
-    """The rocket state an observation describes (the mass is left out)."""
-    x, y, vx, vy, sin_tilt, cos_tilt, spin, _ = (float(value) for value in observation)
-    return RocketState(x=x, y=y, vx=vx, vy=vy, tilt=math.atan2(sin_tilt, cos_tilt), spin=spin)
 
 
 class RocketLandingEnv(gym.Env):
