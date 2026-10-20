@@ -15,7 +15,9 @@ computes probabilities, so they stay SB3's.
 from collections.abc import Sequence
 
 import torch
+from gymnasium import spaces
 from stable_baselines3.common.policies import ActorCriticPolicy
+from stable_baselines3.common.type_aliases import Schedule
 from torch import nn
 
 
@@ -52,12 +54,21 @@ def _layers(inputs: int, hidden_sizes: Sequence[int]) -> nn.Sequential:
 class SB3PolicyAdapter(ActorCriticPolicy):
     """SB3's actor-critic policy with RocketNetwork inside, for ``PPO(SB3PolicyAdapter, ...)``.
 
-    Choose the layer sizes with ``policy_kwargs={"hidden_sizes": [64, 64]}``.
+    PPO creates it, as ``SB3PolicyAdapter(observation_space, action_space, lr_schedule,
+    use_sde=..., **policy_kwargs)``: choose the layer sizes with
+    ``policy_kwargs={"hidden_sizes": [64, 64]}``.
     """
 
-    def __init__(self, *args, hidden_sizes: Sequence[int], **kwargs) -> None:
+    def __init__(
+        self,
+        observation_space: spaces.Space,  # what the network reads: the 8 observations
+        action_space: spaces.Space,  # what it outputs: one action in [-1, 1] per nozzle
+        lr_schedule: Schedule,  # the learning rate over training
+        use_sde: bool,  # another kind of exploration noise; PPO passes False by default
+        hidden_sizes: Sequence[int],  # layer sizes of the actor and the critic
+    ) -> None:
         self.hidden_sizes = tuple(hidden_sizes)  # set first: the parent builds the network
-        super().__init__(*args, **kwargs)
+        super().__init__(observation_space, action_space, lr_schedule, use_sde=use_sde)
 
     def _build_mlp_extractor(self) -> None:
         self.mlp_extractor = RocketNetwork(self.features_dim, self.hidden_sizes)

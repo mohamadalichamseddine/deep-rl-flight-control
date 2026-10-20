@@ -1,8 +1,9 @@
 """Train the network with PPO from Stable-Baselines3 (SB3)."""
 
 import json
+import statistics
 import time
-from collections import Counter
+from collections import Counter, deque
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -11,6 +12,7 @@ import yaml
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback, CheckpointCallback
 from stable_baselines3.common.env_util import make_vec_env
+from stable_baselines3.common.logger import Logger, TensorBoardOutputFormat
 from stable_baselines3.common.vec_env import SubprocVecEnv
 
 from rocketlander.environment.env_config import EnvConfig
@@ -19,11 +21,16 @@ from rocketlander.environment.rocket_landing_env import RocketLandingEnv
 from rocketlander.evaluation.evaluation import run_episode
 from rocketlander.ppo.network_controller import ScaledObservation, scale_observation
 from rocketlander.ppo.rocket_network import SB3PolicyAdapter
+from rocketlander.ppo.training_metrics import TrainingMetrics
 from rocketlander.rocket.rocket_spec import RocketSpec
 
 # Validation starts: used to watch training and pick the best network. Separate from both
 # the training starts (small seeds) and the test set (seeds from 1,000,000).
 FIRST_VALIDATION_SEED = 2_000_000
+
+# The training landing rate is over the last TRAINING_FLIGHTS finished training flights, like
+# SB3's average reward of the training flights (rollout/ep_rew_mean, its stats_window_size).
+TRAINING_FLIGHTS = 100
 
 
 @dataclass(frozen=True)
@@ -52,10 +59,33 @@ def log(run_dir: Path, line: str) -> None:
         f.write(line + "\n")
 
 
+class TrainingFlightsCallback(BaseCallback):
+    """At the end of every round, logs the landing rate of the last ``TRAINING_FLIGHTS``
+    training flights (with exploration noise) as rollout/landing_rate, next to SB3's
+    rollout/ep_rew_mean: their average reward."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.outcomes: deque[Outcome] = deque(maxlen=TRAINING_FLIGHTS)
+
+    def _on_step(self) -> bool:
+        # One info and done per rocket; the info of a flight's last step holds its outcome.
+        for info, done in zip(self.locals["infos"], self.locals["dones"], strict=True):
+            if done:
+                self.outcomes.append(info["outcome"])
+        return True
+
+    def _on_rollout_end(self) -> None:
+        if self.outcomes:
+            landed = sum(outcome == Outcome.LANDED for outcome in self.outcomes)
+            self.logger.record("rollout/landing_rate", landed / len(self.outcomes))
+
+
 class ValidationCallback(BaseCallback):
     """Every ``train_config.validate_every`` steps, flies the current network on the validation
-    starts (without exploration noise), logs the landing rate to TensorBoard, the console and
-    training.log, and saves the best network so far as best_network.zip.
+    starts (without exploration noise), logs the landing rate and the average reward to
+    TensorBoard, metrics.csv, the console and training.log, and saves the best network so far
+    as best_network.zip.
 
     SB3 calls ``_on_step`` after every training step. ``self.model`` is SB3's name for the PPO
     trainer, which holds the network.
@@ -85,8 +115,10 @@ class ValidationCallback(BaseCallback):
             for i in range(self.train_config.validation_episodes)
         ]
         rate = sum(r.outcome == Outcome.LANDED for r in results) / len(results)
+        reward = statistics.mean(r.total_reward for r in results)
         outcomes = Counter(r.outcome for r in results)
         self.logger.record("validation/landing_rate", rate)
+        self.logger.record("validation/reward", reward)
         for outcome, count in outcomes.items():
             self.logger.record(f"validation/{outcome}", count / len(results))
         if rate >= self.best_landing_rate:
@@ -97,7 +129,8 @@ class ValidationCallback(BaseCallback):
         log(
             self.run_dir,
             f"{self.num_timesteps:>11,} steps  {minutes:5.1f} min  "
-            f"landing rate {rate:4.0%}  (best {self.best_landing_rate:4.0%})  {counts}",
+            f"landing rate {rate:4.0%}  (best {self.best_landing_rate:4.0%})  "
+            f"average reward {reward:7.1f}  {counts}",
         )
 
 
@@ -112,7 +145,9 @@ def train(
 
     Saves best_network.zip (best validation landing rate), final_network.zip, checkpoints/,
     the settings used (train_config.json, env_config.json, rocket_spec.json), training.log,
-    and TensorBoard logs. The step count starts at 0 even when continuing a network.
+    how training went (metrics.csv, one ``TrainingRound`` per round, and training_curves.png),
+    and TensorBoard logs (tensorboard/). The step count starts at 0 even when continuing a
+    network.
     """
     run_dir.mkdir(parents=True, exist_ok=True)
     settings = {"train_config": train_config, "env_config": env_config, "rocket_spec": rocket_spec}
@@ -139,7 +174,6 @@ def train(
             SB3PolicyAdapter,
             env,
             seed=train_config.seed,
-            tensorboard_log=str(run_dir),
             **train_config.ppo,
         )
     else:
@@ -148,11 +182,23 @@ def train(
             start_from,
             env=env,
             seed=train_config.seed,
-            tensorboard_log=str(run_dir),
             **train_config.ppo,
         )
+    # Everything SB3 and our callbacks log goes to TensorBoard and to metrics.csv.
+    training_metrics = TrainingMetrics(
+        run_dir / "metrics.csv",
+        run_dir / "training_curves.png",
+        f"Training curves: level {level}, seed {train_config.seed}",
+    )
+    ppo.set_logger(
+        Logger(
+            str(run_dir),
+            [TensorBoardOutputFormat(str(run_dir / "tensorboard")), training_metrics],
+        )
+    )
     validation_env = RocketLandingEnv(rocket_spec, env_config, level=level, render_mode=None)
     callbacks = [
+        TrainingFlightsCallback(),
         ValidationCallback(train_config, run_dir, validation_env),
         CheckpointCallback(
             save_freq=max(train_config.validate_every * 4 // train_config.parallel_rockets, 1),
@@ -161,9 +207,10 @@ def train(
         ),
     ]
     try:
-        ppo.learn(train_config.total_steps, callback=callbacks, tb_log_name="tensorboard")
+        ppo.learn(train_config.total_steps, callback=callbacks)
     finally:
         ppo.save(run_dir / "final_network")
         env.close()
+        ppo.logger.close()  # draws the final training curves
     log(run_dir, f"saved to {run_dir}")
     return ppo

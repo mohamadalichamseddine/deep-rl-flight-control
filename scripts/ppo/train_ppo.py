@@ -2,8 +2,9 @@
 
 Results go to runs/training/<experiment>/seed<N>/level<N>/: best_network.zip (best validation
 landing rate), final_network.zip, checkpoints/, the settings used (train_config.json,
-env_config.json, rocket_spec.json), training.log, and TensorBoard logs. Name the experiment
-after what it tries, e.g. graded-touchdown-penalty.
+env_config.json, rocket_spec.json), training.log, metrics.csv and training_curves.png (how
+training went, round by round), and TensorBoard logs. Name the experiment after what it
+tries, e.g. graded-touchdown-penalty.
 
 Level 0 starts from random weights. Each higher level continues from the best network of the
 level below, in the same experiment and seed, so train the levels in order:
@@ -38,7 +39,7 @@ def main() -> None:
     parser.add_argument(
         "--parallel-rockets",
         type=int,
-        help="rockets flying at once, ideally one per CPU core; each iteration then collects "
+        help="rockets flying at once, ideally one per CPU core; each round then collects "
         "parallel rockets x n_steps steps",
     )
     args = parser.parse_args()
