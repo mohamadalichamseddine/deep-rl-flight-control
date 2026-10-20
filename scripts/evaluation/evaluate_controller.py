@@ -18,8 +18,9 @@ from pathlib import Path
 
 from rocketlander.config_files import ENV_CONFIG_FILE, PD_GAINS_FILE, ROCKET_SPEC_FILE
 from rocketlander.environment.env_config import build_env_config
+from rocketlander.environment.observation import observation_to_state
 from rocketlander.environment.outcome import Outcome
-from rocketlander.environment.rocket_landing_env import RocketLandingEnv, observation_to_state
+from rocketlander.environment.rocket_landing_env import RocketLandingEnv
 from rocketlander.evaluation.controllers import CONTROLLERS, make_controller
 from rocketlander.evaluation.evaluation import (
     can_stop_before_the_ground,

@@ -10,8 +10,9 @@ from typing import Any
 import numpy as np
 
 from rocketlander.environment.landing_judge import LandingCheck, parts_other_than_legs
+from rocketlander.environment.observation import observation_to_state
 from rocketlander.environment.outcome import Outcome
-from rocketlander.environment.rocket_landing_env import RocketLandingEnv, observation_to_state
+from rocketlander.environment.rocket_landing_env import RocketLandingEnv
 from rocketlander.rocket.rocket_simulator import RocketSimulator, Touchdown
 from rocketlander.rocket.rocket_state import RocketState
 

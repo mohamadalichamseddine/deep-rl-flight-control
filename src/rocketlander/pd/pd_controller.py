@@ -7,7 +7,8 @@ from pathlib import Path
 import numpy as np
 import yaml
 
-from rocketlander.environment.rocket_landing_env import observation_to_state, throttles_to_action
+from rocketlander.environment.action import throttles_to_action
+from rocketlander.environment.observation import observation_to_state
 from rocketlander.rocket.rocket_simulator import RocketSimulator
 
 
