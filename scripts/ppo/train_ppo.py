@@ -15,6 +15,12 @@ level below, in the same experiment and seed, so train the levels in order:
     uv run python scripts/ppo/train_ppo.py --experiment my-experiment --level 0 \\
         --parallel-rockets 16
 
+--continue keeps training a finished run from its final network, for --steps more steps, with
+the settings saved in its folder:
+
+    uv run python scripts/ppo/train_ppo.py --experiment my-experiment --level 0 \\
+        --continue --steps 5000000
+
 Settings: configs/train/ppo.yaml. Watch progress live:  uv run tensorboard --logdir runs/training
 """
 
@@ -24,7 +30,12 @@ from pathlib import Path
 
 from rocketlander.config_files import ENV_CONFIG_FILE, ROCKET_SPEC_FILE, TRAIN_CONFIG_FILE
 from rocketlander.environment.env_config import build_env_config
-from rocketlander.ppo.ppo_training import build_train_config, train
+from rocketlander.ppo.ppo_training import (
+    TrainConfig,
+    build_train_config,
+    continue_training,
+    train,
+)
 from rocketlander.rocket.rocket_spec import build_rocket_spec
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -36,12 +47,19 @@ def main() -> None:
     parser.add_argument("--config", default=TRAIN_CONFIG_FILE)
     parser.add_argument("--level", type=int, choices=[0, 1, 2], required=True)
     parser.add_argument("--seed", type=int)
-    parser.add_argument("--steps", type=int)
+    parser.add_argument("--steps", type=int, help="with --continue: how many more steps")
     parser.add_argument(
         "--parallel-rockets",
         type=int,
         help="rockets flying at once, ideally one per CPU core; each round then collects "
         "parallel rockets x n_steps steps",
+    )
+    parser.add_argument(
+        "--continue",
+        dest="continue_run",
+        action="store_true",
+        help="keep training this experiment's run of this seed and level, from its final "
+        "network and with its saved settings",
     )
     args = parser.parse_args()
 
@@ -57,8 +75,22 @@ def main() -> None:
 
     seed_dir = ROOT / "runs" / "training" / args.experiment / f"seed{train_config.seed}"
     run_dir = seed_dir / f"level{args.level}"
+    print(f"experiment {args.experiment}")
+    if args.continue_run:
+        continue_run(args, run_dir)
+    else:
+        start_run(args, train_config, seed_dir, run_dir)
+
+
+def start_run(
+    args: argparse.Namespace, train_config: TrainConfig, seed_dir: Path, run_dir: Path
+) -> None:
+    """A new run, from random weights (level 0) or the best network of the level below."""
     if run_dir.exists():
-        raise SystemExit(f"{run_dir} already exists: choose another --experiment, or delete it")
+        raise SystemExit(
+            f"{run_dir} already exists: choose another --experiment, delete it, "
+            "or keep training it with --continue"
+        )
     start_from = None
     if args.level > 0:
         start_from = seed_dir / f"level{args.level - 1}" / "best_network.zip"
@@ -70,8 +102,30 @@ def main() -> None:
 
     rocket_spec = build_rocket_spec(ROCKET_SPEC_FILE)
     env_config = build_env_config(ENV_CONFIG_FILE)
-    print(f"experiment {args.experiment}")
     train(train_config, rocket_spec, env_config, args.level, run_dir, start_from)
+
+
+def continue_run(args: argparse.Namespace, run_dir: Path) -> None:
+    """More steps for a finished run, with the settings saved in its folder (not the current
+    config files, which may have changed since)."""
+    if args.steps is None:
+        raise SystemExit("--continue needs --steps: how many more steps to train")
+    if args.parallel_rockets is not None or args.config != TRAIN_CONFIG_FILE:
+        raise SystemExit(
+            "--continue uses the run's saved settings: leave out --parallel-rockets and --config"
+        )
+    final_network = run_dir / "final_network.zip"
+    if not final_network.exists():
+        raise SystemExit(f"{final_network} not found: no finished run to continue")
+
+    continue_training(
+        build_train_config(run_dir / "train_config.json"),
+        build_rocket_spec(run_dir / "rocket_spec.json"),
+        build_env_config(run_dir / "env_config.json"),
+        args.level,
+        run_dir,
+        args.steps,
+    )
 
 
 if __name__ == "__main__":

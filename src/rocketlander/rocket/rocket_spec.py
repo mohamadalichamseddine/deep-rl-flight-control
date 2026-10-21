@@ -82,7 +82,8 @@ class RocketSpec:
 
 
 def build_rocket_spec(path: str | Path) -> RocketSpec:
-    """Read a rocket config file (YAML) and build the rocket's description from it."""
+    """Read a rocket config file (YAML, or a run's saved rocket_spec.json: JSON is valid YAML)
+    and build the rocket's description from it."""
     with Path(path).open(encoding="utf-8") as f:
         config = yaml.safe_load(f)
 

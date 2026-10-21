@@ -4,7 +4,12 @@ from pathlib import Path
 import numpy as np
 from stable_baselines3.common.logger import Logger
 
-from rocketlander.ppo.training_metrics import COLUMNS, TrainingMetrics
+from rocketlander.ppo.training_metrics import (
+    COLUMNS,
+    TrainingMetrics,
+    read_training_rounds,
+)
+from rocketlander.ppo.training_round import TrainingRound
 
 
 def _rows(metrics_file: Path) -> list[dict[str, str]]:
@@ -14,7 +19,7 @@ def _rows(metrics_file: Path) -> list[dict[str, str]]:
 
 def test_each_round_is_a_row_and_a_validation_redraws_the_curves(tmp_path) -> None:
     metrics_file, curves_file = tmp_path / "metrics.csv", tmp_path / "training_curves.png"
-    logger = Logger(str(tmp_path), [TrainingMetrics(metrics_file, curves_file, "Test run")])
+    logger = Logger(str(tmp_path), [TrainingMetrics(metrics_file, curves_file, "Test run", [])])
 
     # Round 1: training flights only, before any update. SB3 logs NumPy numbers.
     logger.record("rollout/ep_rew_mean", np.float64(-80.5))
@@ -53,7 +58,7 @@ def test_each_round_is_a_row_and_a_validation_redraws_the_curves(tmp_path) -> No
 def test_the_end_of_training_draws_the_final_curves(tmp_path) -> None:
     curves_file = tmp_path / "training_curves.png"
     logger = Logger(
-        str(tmp_path), [TrainingMetrics(tmp_path / "metrics.csv", curves_file, "Test run")]
+        str(tmp_path), [TrainingMetrics(tmp_path / "metrics.csv", curves_file, "Test run", [])]
     )
     logger.record("rollout/ep_rew_mean", -80.0)
     logger.dump(step=8192)
@@ -61,3 +66,32 @@ def test_the_end_of_training_draws_the_final_curves(tmp_path) -> None:
     logger.close()
 
     assert curves_file.exists()
+
+
+def test_a_continued_run_keeps_its_earlier_rounds(tmp_path) -> None:
+    metrics_file = tmp_path / "metrics.csv"
+    earlier = [
+        TrainingRound(8192, -80.5, 0.0, None, None, None, None, None),
+        TrainingRound(16384, -60.0, 0.1, -40.0, 0.2, -0.01, 250.0, 124.99),
+    ]
+    first_part = TrainingMetrics(metrics_file, tmp_path / "curves.png", "Test run", earlier)
+    assert read_training_rounds(metrics_file) == earlier
+
+    # Continuing: read the rounds back, start from them, and add the next round.
+    logger = Logger(
+        str(tmp_path),
+        [
+            TrainingMetrics(
+                metrics_file,
+                tmp_path / "curves.png",
+                "Test run",
+                read_training_rounds(metrics_file),
+            )
+        ],
+    )
+    logger.record("rollout/ep_rew_mean", 10.0)
+    logger.dump(step=24576)
+
+    rounds = read_training_rounds(metrics_file)
+    assert rounds[:2] == earlier and [r.step for r in rounds] == [8192, 16384, 24576]
+    assert first_part.training_rounds == earlier

@@ -10,7 +10,7 @@ validate_every: 250000
 validation_episodes: 50
 
 ppo:
-  learning_rate: 3.0e-4
+  learning_rate: 1.0e-4         # smaller steps: at 3e-4, training found landing, then lost it again
   n_steps: 1024             # steps per rocket between network updates
   batch_size: 256
   n_epochs: 10

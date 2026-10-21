@@ -75,6 +75,14 @@ Other options: `--seed 1` trains another seed of the same experiment, and `--ste
 number of training steps (5,000,000 by default). Ctrl+C stops a run early; it still saves
 `final_network.zip` and the training curves.
 
+To give a finished run more steps, continue it from its `final_network.zip`. It keeps the
+settings saved in its folder, and its step count, `metrics.csv` and curves go on where they
+stopped:
+
+```powershell
+uv run python scripts/ppo/train_ppo.py --experiment my-experiment --level 0 --continue --steps 5000000
+```
+
 ### Watching progress
 
 - **Console and `training.log`:** every 250,000 steps, the network flies the 50 validation

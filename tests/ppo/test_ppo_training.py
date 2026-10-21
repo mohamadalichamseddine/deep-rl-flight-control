@@ -7,15 +7,17 @@ import pytest
 from stable_baselines3.common.logger import Logger
 
 from rocketlander.config_files import TRAIN_CONFIG_FILE
-from rocketlander.environment.env_config import EnvConfig
+from rocketlander.environment.env_config import EnvConfig, build_env_config
 from rocketlander.environment.outcome import Outcome
 from rocketlander.ppo.ppo_training import (
     TRAINING_FLIGHTS,
     TrainingFlightsCallback,
+    ValidationCallback,
     build_train_config,
+    continue_training,
     train,
 )
-from rocketlander.rocket.rocket_spec import RocketSpec
+from rocketlander.rocket.rocket_spec import RocketSpec, build_rocket_spec
 
 
 def test_default_config_loads_with_ppo_settings() -> None:
@@ -45,6 +47,21 @@ def test_training_landing_rate_counts_the_last_finished_flights() -> None:
         step([landed], [True])
     callback.on_rollout_end()
     assert logger.name_to_value["rollout/landing_rate"] == 1.0
+
+
+@pytest.mark.parametrize(
+    ("steps_so_far", "first_validation"),
+    [(0, 250_000), (5_005_312, 5_250_000)],  # a new run; a run continued after 5M steps
+)
+def test_validation_starts_at_the_next_multiple_of_validate_every(
+    steps_so_far: int, first_validation: int
+) -> None:
+    callback = ValidationCallback(build_train_config(TRAIN_CONFIG_FILE), None, None, -1.0)
+    callback.init_callback(SimpleNamespace(num_timesteps=steps_so_far))  # the trainer
+
+    callback.on_training_start({}, {})
+
+    assert callback.next_validation_step == first_validation
 
 
 def test_a_tiny_training_run_saves_everything(
@@ -85,3 +102,19 @@ def test_a_tiny_training_run_saves_everything(
         rows = list(csv.DictReader(f))
     assert len(rows) == 2
     assert rows[1]["actor_loss"] != "" and rows[1]["validation_landing_rate"] != ""
+
+    # Continuing for 128 more steps: one more round, with the step count going on from 256.
+    continue_training(
+        build_train_config(tmp_path / "train_config.json"),
+        build_rocket_spec(tmp_path / "rocket_spec.json"),
+        build_env_config(tmp_path / "env_config.json"),
+        level=0,
+        run_dir=tmp_path,
+        extra_steps=128,
+    )
+
+    with (tmp_path / "metrics.csv").open(encoding="utf-8", newline="") as f:
+        steps = [int(row["step"]) for row in csv.DictReader(f)]
+    assert steps == [128, 256, 384]
+    assert build_train_config(tmp_path / "train_config.json").total_steps == 384
+    assert "continuing level 0" in (tmp_path / "training.log").read_text(encoding="utf-8")
