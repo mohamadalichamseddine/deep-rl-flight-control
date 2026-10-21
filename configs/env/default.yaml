@@ -33,8 +33,10 @@ reward:
   # An unsafe touchdown is graded, so a near miss costs little and a crash a lot: the base
   # penalty, plus penalty_per_limit_missed for each limit's worth of miss, summed over the
   # failed checks (0.4 m/s down with a 0.3 limit = 0.33). Never worse than lost_control_penalty.
+  # Kept mild, so that touching down a bit too fast still beats hovering until the time limit:
+  # at -10 per limit, any touchdown faster than about 0.6 m/s scored worse than hovering.
   unsafe_touchdown_penalty: -10.0
-  penalty_per_limit_missed: -10.0
+  penalty_per_limit_missed: -2.0
   lost_control_penalty: -100.0    # tilted past the limit, left the flight region, or body hit the ground
   time_limit_penalty: -100.0      # ran out of time (fuel): worse than any attempt to land
 
