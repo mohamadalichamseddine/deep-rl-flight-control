@@ -1,5 +1,6 @@
 """Train the network with PPO from Stable-Baselines3 (SB3)."""
 
+import dataclasses
 import json
 import statistics
 import time
@@ -13,7 +14,7 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback, CheckpointCallback
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.logger import Logger, TensorBoardOutputFormat
-from stable_baselines3.common.vec_env import SubprocVecEnv
+from stable_baselines3.common.vec_env import SubprocVecEnv, VecEnv
 
 from rocketlander.environment.env_config import EnvConfig
 from rocketlander.environment.outcome import Outcome
@@ -21,7 +22,8 @@ from rocketlander.environment.rocket_landing_env import RocketLandingEnv
 from rocketlander.evaluation.evaluation import run_episode
 from rocketlander.ppo.network_controller import ScaledObservation, scale_observation
 from rocketlander.ppo.rocket_network import SB3PolicyAdapter
-from rocketlander.ppo.training_metrics import TrainingMetrics
+from rocketlander.ppo.training_metrics import TrainingMetrics, read_training_rounds
+from rocketlander.ppo.training_round import TrainingRound
 from rocketlander.rocket.rocket_spec import RocketSpec
 
 # Validation starts: used to watch training and pick the best network. Separate from both
@@ -44,7 +46,8 @@ class TrainConfig:
 
 
 def build_train_config(path: str | Path) -> TrainConfig:
-    """Read a training config file (YAML) and build the settings from it."""
+    """Read a training config file (YAML, or a run's saved train_config.json: JSON is valid
+    YAML) and build the settings from it."""
     with Path(path).open(encoding="utf-8") as f:
         config = yaml.safe_load(f)
 
@@ -84,24 +87,37 @@ class ValidationCallback(BaseCallback):
     """Every ``train_config.validate_every`` steps, flies the current network on the validation
     starts (without exploration noise), logs the landing rate and the average reward to
     TensorBoard, metrics.csv, the console and training.log, and saves the best network so far
-    as best_network.zip.
+    as best_network.zip. It replaces the best network only when it does at least as well as
+    ``best_landing_rate``: -1 for a new run, the best so far when continuing one.
 
     SB3 calls ``_on_step`` after every training step. ``self.model`` is SB3's name for the PPO
     trainer, which holds the network.
     """
 
-    def __init__(self, train_config: TrainConfig, run_dir: Path, env: RocketLandingEnv) -> None:
+    def __init__(
+        self,
+        train_config: TrainConfig,
+        run_dir: Path,
+        env: RocketLandingEnv,
+        best_landing_rate: float,
+    ) -> None:
         super().__init__()
         self.train_config = train_config
         self.run_dir = run_dir
         self.env = env
-        self.best_landing_rate = -1.0
-        self._next_validation_step = train_config.validate_every
+        self.best_landing_rate = best_landing_rate
+        self.next_validation_step = 0  # set when training starts
         self._start = time.monotonic()
 
+    def _on_training_start(self) -> None:
+        # The next multiple of validate_every: the first one for a new run, and the one after
+        # the step count the run stopped at when continuing it.
+        every = self.train_config.validate_every
+        self.next_validation_step = (self.num_timesteps // every + 1) * every
+
     def _on_step(self) -> bool:
-        if self.num_timesteps >= self._next_validation_step:
-            self._next_validation_step += self.train_config.validate_every
+        if self.num_timesteps >= self.next_validation_step:
+            self.next_validation_step += self.train_config.validate_every
             self._validate()
         return True
 
@@ -141,19 +157,18 @@ def train(
     run_dir: Path,
     start_from: Path | None,
 ) -> PPO:
-    """Train a network on the starts of ``level`` (or keep training ``start_from``) and save
-    it in ``run_dir``.
+    """Train a network on the starts of ``level``, from random weights or from ``start_from``
+    (the best network of the level below), and save it in ``run_dir``.
 
     Saves best_network.zip (best validation landing rate), final_network.zip, checkpoints/,
     the settings used (train_config.json, env_config.json, rocket_spec.json), training.log,
     how training went (metrics.csv, one ``TrainingRound`` per round, and training_curves.png),
-    and TensorBoard logs (tensorboard/). The step count starts at 0 even when continuing a
-    network.
+    and TensorBoard logs (tensorboard/). The step count starts at 0, also from ``start_from``.
     """
     run_dir.mkdir(parents=True, exist_ok=True)
     settings = {"train_config": train_config, "env_config": env_config, "rocket_spec": rocket_spec}
     for name, value in settings.items():
-        (run_dir / f"{name}.json").write_text(json.dumps(asdict(value), indent=2), encoding="utf-8")
+        _save_json(run_dir / f"{name}.json", value)
     log(
         run_dir,
         f"training level {level}, seed {train_config.seed}, "
@@ -161,14 +176,7 @@ def train(
         "parallel, "
         + (f"continuing from {start_from}" if start_from else "starting from random weights"),
     )
-    env = make_vec_env(
-        lambda: ScaledObservation(
-            RocketLandingEnv(rocket_spec, env_config, level=level, render_mode=None)
-        ),
-        n_envs=train_config.parallel_rockets,
-        seed=train_config.seed,
-        vec_env_cls=SubprocVecEnv,
-    )
+    env = _training_env(train_config, rocket_spec, env_config, level)
     if start_from is None:
         ppo = PPO(
             SB3PolicyAdapter,
@@ -184,11 +192,90 @@ def train(
             seed=train_config.seed,
             **train_config.ppo,
         )
+    _learn(
+        ppo,
+        env,
+        train_config,
+        rocket_spec,
+        env_config,
+        level,
+        run_dir,
+        previous_rounds=[],
+        steps=train_config.total_steps,
+        reset_num_timesteps=True,
+    )
+    return ppo
+
+
+def continue_training(
+    train_config: TrainConfig,
+    rocket_spec: RocketSpec,
+    env_config: EnvConfig,
+    level: int,
+    run_dir: Path,
+    extra_steps: int,
+) -> PPO:
+    """Keep training the run in ``run_dir`` from its final_network.zip for ``extra_steps`` more
+    steps. Pass the run's own saved settings, so both parts train on the same task.
+
+    The step count goes on from where the run stopped. metrics.csv, training.log and the
+    curves continue, best_network.zip is only replaced by a validation at least as good as
+    the run's best so far, and train_config.json gets the new total of steps.
+    """
+    previous_rounds = read_training_rounds(run_dir / "metrics.csv")
+    env = _training_env(train_config, rocket_spec, env_config, level)
+    ppo = PPO.load(
+        run_dir / "final_network.zip",
+        env=env,
+        seed=train_config.seed,
+        **train_config.ppo,
+    )
+    train_config = dataclasses.replace(train_config, total_steps=ppo.num_timesteps + extra_steps)
+    _save_json(run_dir / "train_config.json", train_config)
+    log(
+        run_dir,
+        f"continuing level {level}, seed {train_config.seed}, from step {ppo.num_timesteps:,} "
+        f"for {extra_steps:,} more steps, from {run_dir / 'final_network.zip'}",
+    )
+    _learn(
+        ppo,
+        env,
+        train_config,
+        rocket_spec,
+        env_config,
+        level,
+        run_dir,
+        previous_rounds=previous_rounds,
+        steps=extra_steps,
+        reset_num_timesteps=False,
+    )
+    return ppo
+
+
+def _learn(
+    ppo: PPO,
+    env: VecEnv,
+    train_config: TrainConfig,
+    rocket_spec: RocketSpec,
+    env_config: EnvConfig,
+    level: int,
+    run_dir: Path,
+    previous_rounds: list[TrainingRound],
+    steps: int,
+    reset_num_timesteps: bool,
+) -> None:
+    """Train ``ppo`` for ``steps`` steps, logging and saving into ``run_dir``.
+
+    ``previous_rounds`` are the rounds of the run so far: none for a new run.
+    ``reset_num_timesteps`` is SB3's: True starts the step count (and SB3's list of recent
+    training flights) again at 0; False goes on from the count saved in the network.
+    """
     # Everything SB3 and our callbacks log goes to TensorBoard and to metrics.csv.
     training_metrics = TrainingMetrics(
         run_dir / "metrics.csv",
         run_dir / "training_curves.png",
         f"Training curves: level {level}, seed {train_config.seed}",
+        previous_rounds,
     )
     ppo.set_logger(
         Logger(
@@ -196,10 +283,12 @@ def train(
             [TensorBoardOutputFormat(str(run_dir / "tensorboard")), training_metrics],
         )
     )
+    validated = [r.validation_landing_rate for r in previous_rounds]
+    best_landing_rate = max((rate for rate in validated if rate is not None), default=-1.0)
     validation_env = RocketLandingEnv(rocket_spec, env_config, level=level, render_mode=None)
     callbacks = [
         TrainingFlightsCallback(),
-        ValidationCallback(train_config, run_dir, validation_env),
+        ValidationCallback(train_config, run_dir, validation_env, best_landing_rate),
         CheckpointCallback(
             save_freq=max(train_config.validate_every * 4 // train_config.parallel_rockets, 1),
             save_path=str(run_dir / "checkpoints"),
@@ -207,10 +296,28 @@ def train(
         ),
     ]
     try:
-        ppo.learn(train_config.total_steps, callback=callbacks)
+        ppo.learn(steps, callback=callbacks, reset_num_timesteps=reset_num_timesteps)
     finally:
         ppo.save(run_dir / "final_network")
         env.close()
         ppo.logger.close()  # draws the final training curves
     log(run_dir, f"saved to {run_dir}")
-    return ppo
+
+
+def _training_env(
+    train_config: TrainConfig, rocket_spec: RocketSpec, env_config: EnvConfig, level: int
+) -> VecEnv:
+    """The training rockets: one process each, flying in parallel, with scaled observations."""
+    return make_vec_env(
+        lambda: ScaledObservation(
+            RocketLandingEnv(rocket_spec, env_config, level=level, render_mode=None)
+        ),
+        n_envs=train_config.parallel_rockets,
+        seed=train_config.seed,
+        vec_env_cls=SubprocVecEnv,
+    )
+
+
+def _save_json(path: Path, settings: Any) -> None:
+    """Save a settings data class as JSON, which the build_* functions can read back."""
+    path.write_text(json.dumps(asdict(settings), indent=2), encoding="utf-8")

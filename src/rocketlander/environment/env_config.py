@@ -73,7 +73,8 @@ class EnvConfig:
 
 
 def build_env_config(path: str | Path) -> EnvConfig:
-    """Read an environment config file (YAML) and build the settings from it."""
+    """Read an environment config file (YAML, or a run's saved env_config.json: JSON is valid
+    YAML) and build the settings from it."""
     with Path(path).open(encoding="utf-8") as f:
         config = yaml.safe_load(f)
 
