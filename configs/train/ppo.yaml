@@ -10,11 +10,14 @@ validate_every: 250000
 validation_episodes: 50
 
 ppo:
-  learning_rate: 1.0e-4         # smaller steps: at 3e-4, training found landing, then lost it again
+  learning_rate: 1.0e-4     # smaller steps: at 3e-4, training found landing, then lost it again
   n_steps: 1024             # steps per rocket between network updates
   batch_size: 256
   n_epochs: 10
-  gamma: 0.999              # long horizon: a flight lasts up to 3000 steps
+  # How much a reward counts per step it is away: a flight lasts up to 3000 steps. At 0.999,
+  # the time-limit penalty 60 s ahead counted 5%, so hovering looked as good as landing
+  # attempts; at 0.9995 it counts 22%.
+  gamma: 0.9995
   gae_lambda: 0.98
   clip_range: 0.2
   ent_coef: 0.0
