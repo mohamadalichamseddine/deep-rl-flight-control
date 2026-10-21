@@ -35,10 +35,11 @@ Levels 0, 1 and 2 are how hard the starting conditions are (height, speed, tilt;
 
 - **On your computer.** Training flies 8 rockets at once (`parallel_rockets` in
   `configs/train/ppo.yaml`), ideally one per CPU core; with fewer cores, pass
-  `--parallel-rockets` with your number of cores. No GPU is needed: the network is small, and
-  most of the time goes into the physics. Keep the computer awake for the whole run, as sleep
-  pauses training.
-- **On GitHub Codespaces**, a cloud machine with up to 32 cores: see
+  `--parallel-rockets` with your number of cores. No GPU is needed: the network is small enough
+  for the CPU. Training needs about 4 GB of free memory (each rocket's process loads PyTorch),
+  so close large apps first. Keep the computer awake for the whole run, as sleep pauses
+  training.
+- **On GitHub Codespaces**, a cloud machine, so your computer stays free: see
   [Training on GitHub Codespaces](docs/training-on-codespaces.md).
 
 Use the same `--parallel-rockets` for every level and seed of an experiment. It sets how many
