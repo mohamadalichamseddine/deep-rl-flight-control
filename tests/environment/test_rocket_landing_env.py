@@ -202,6 +202,20 @@ def test_running_out_of_time_is_a_failure(rocket_spec: RocketSpec, env_config: E
     assert reward == pytest.approx(env_config.reward.time_limit_penalty, abs=1.0)
 
 
+def test_every_second_in_the_air_costs_time_weight(
+    rocket_spec: RocketSpec, env_config: EnvConfig
+) -> None:
+    env = RocketLandingEnv(rocket_spec, env_config, level=0, render_mode=None)
+    _start(env, RocketState(0.0, 50.0, 0.0, 0.0))
+
+    _, reward, _, _, info = env.step(HOVER_ACTION)
+
+    # Hovering in place keeps the landing score, so only the fuel and the time cost.
+    reward_settings = env_config.reward
+    fuel = reward_settings.fuel_weight * info["fuel_used"]
+    assert reward == pytest.approx(-fuel - reward_settings.time_weight * 0.02, abs=1e-4)
+
+
 @pytest.mark.parametrize(("vy", "sign"), [(-5.0, +1), (+5.0, -1)])
 def test_moving_toward_the_pad_is_rewarded_and_away_is_penalized(
     rocket_spec: RocketSpec, env_config: EnvConfig, vy: float, sign: int

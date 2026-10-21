@@ -67,7 +67,7 @@ class RocketLandingEnv(gym.Env):
             max_steps=round(env_config.limits.time_limit / env_config.dt),
         )
         self.landing_reward = LandingReward(
-            env_config.reward, self.rocket_simulator.y_when_standing
+            env_config.reward, self.rocket_simulator.y_when_standing, env_config.dt
         )
 
         n_nozzles = len(rocket_spec.nozzles)
