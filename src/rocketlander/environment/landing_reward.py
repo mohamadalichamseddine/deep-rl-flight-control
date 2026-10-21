@@ -10,15 +10,16 @@ from rocketlander.rocket.rocket_state import RocketState
 
 
 class LandingReward:
-    """Each step: how much the landing score improved, minus the fuel used. When the episode
-    ends: a bonus for a safe landing, or a penalty.
+    """Each step: how much the landing score improved, minus the fuel and the time used. When
+    the episode ends: a bonus for a safe landing, or a penalty.
 
     Call ``start`` with the first state of each episode, then ``step`` after every step.
     """
 
-    def __init__(self, reward_settings: RewardSettings, y_when_standing: float) -> None:
+    def __init__(self, reward_settings: RewardSettings, y_when_standing: float, dt: float) -> None:
         self.reward_settings = reward_settings
         self.y_when_standing = y_when_standing  # where the landing score is highest
+        self.dt = dt  # seconds per step
         self._previous_score = 0.0
 
     def start(self, state: RocketState) -> None:
@@ -34,7 +35,13 @@ class LandingReward:
     ) -> float:
         """The reward for the step that ended in ``state``."""
         score = self.landing_score(state)
-        reward = score - self._previous_score - self.reward_settings.fuel_weight * fuel_used
+        settings = self.reward_settings
+        reward = (
+            score
+            - self._previous_score
+            - settings.fuel_weight * fuel_used
+            - settings.time_weight * self.dt
+        )
         self._previous_score = score
         return reward + self.end_of_episode_reward(outcome, touchdown, failed_checks)
 

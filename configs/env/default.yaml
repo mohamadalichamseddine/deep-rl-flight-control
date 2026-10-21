@@ -20,11 +20,14 @@ limits:             # crossing one of these ends the episode
 reward:
   # Every step earns how much the landing score improved, where the landing score is
   # -(distance × distance_weight + speed × speed_weight + tilt × tilt_weight), so getting
-  # closer to the pad, slower, and more upright all pay.
+  # closer to the pad, slower, and more upright all pay; minus the fuel and the time used.
   distance_weight: 1.0            # per m from the landing point
   speed_weight: 1.0               # per m/s
   tilt_weight: 10.0               # per rad (about 0.17 per degree)
   fuel_weight: 0.3                # per second of full main-engine thrust (side nozzles: by thrust)
+  # Each second in the air costs time_weight, felt at once. Without it, hovering until the time
+  # limit looks cheap: discounting (gamma) shrinks a penalty 40 s away to a seventh.
+  time_weight: 1.0                # per second in the air
   # Once, at the end of the episode:
   landed_bonus: 100.0
   # An unsafe touchdown is graded, so a near miss costs little and a crash a lot: the base

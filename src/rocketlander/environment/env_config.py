@@ -35,6 +35,7 @@ class RewardSettings:
     speed_weight: float
     tilt_weight: float
     fuel_weight: float
+    time_weight: float
     landed_bonus: float
     unsafe_touchdown_penalty: float
     penalty_per_limit_missed: float
