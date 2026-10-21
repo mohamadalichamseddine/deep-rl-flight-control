@@ -101,17 +101,17 @@ def test_gentle_upright_touchdown_on_the_pad_is_a_landing(
     assert reward > env_config.reward.landed_bonus - 5
 
 
-@pytest.mark.parametrize(
-    ("vy", "expected"),
-    [
-        (-0.4, -10 - 10 * (0.4 / 0.3 - 1)),  # near miss: 0.4 m/s with a 0.3 limit, about -13
-        (-1.0, -10 - 10 * (1.0 / 0.3 - 1)),  # harder: about -33
-        (-8.0, -100.0),  # a crash: capped at the lost-control penalty
-    ],
-)
+@pytest.mark.parametrize("vy", [-0.4, -1.0, -8.0, -40.0])  # near miss, harder, crash, capped
 def test_unsafe_touchdown_penalty_grows_with_the_miss(
-    rocket_spec: RocketSpec, env_config: EnvConfig, vy: float, expected: float
+    rocket_spec: RocketSpec, env_config: EnvConfig, vy: float
 ) -> None:
+    reward_settings = env_config.reward
+    missed = abs(vy) / 0.3 - 1  # limits' worth past the 0.3 m/s limit
+    expected = max(
+        reward_settings.unsafe_touchdown_penalty
+        + reward_settings.penalty_per_limit_missed * missed,
+        reward_settings.lost_control_penalty,
+    )
     env = RocketLandingEnv(rocket_spec, env_config, level=0, render_mode=None)
     _start(env, RocketState(0.0, STANDING + 0.5, 0.0, vy))
 
