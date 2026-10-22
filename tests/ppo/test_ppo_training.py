@@ -114,7 +114,11 @@ def test_a_tiny_training_run_saves_everything(
         },
     )
 
-    train(train_config, rocket_spec, env_config, level=0, run_dir=tmp_path, start_from=None)
+    ppo = train(train_config, rocket_spec, env_config, level=0, run_dir=tmp_path, start_from=None)
+
+    # The exploration noise started at e^log_std_init; two small updates barely moved it.
+    log_std = ppo.policy.log_std.detach().numpy()
+    assert log_std == pytest.approx([train_config.log_std_init] * 3, abs=0.01)
 
     for name in (
         "best_network.zip",
