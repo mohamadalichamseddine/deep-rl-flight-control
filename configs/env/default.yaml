@@ -24,7 +24,10 @@ reward:
   distance_weight: 1.0            # per m from the landing point
   speed_weight: 1.0               # per m/s
   tilt_weight: 10.0               # per rad (about 0.17 per degree)
-  fuel_weight: 0.3                # per second of full main-engine thrust (side nozzles: by thrust)
+  # Felt at every step, so hovering costs something right away: at 0.3, hovering until the
+  # time limit scored about as well as touching down. Not much higher: a free fall uses no fuel,
+  # and at about 5 crashing would score as well as hovering.
+  fuel_weight: 2.0                # per second of full main-engine thrust (side nozzles: by thrust)
   # Each second in the air costs time_weight, felt at once. Without it, hovering until the time
   # limit looks cheap: discounting (gamma) shrinks a penalty 40 s away to a seventh.
   time_weight: 1.0                # per second in the air
