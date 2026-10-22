@@ -10,6 +10,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+import torch
 import yaml
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback, CheckpointCallback
@@ -49,6 +50,7 @@ class TrainConfig:
     total_steps: int
     parallel_rockets: int
     seed: int
+    log_std_init: float  # a new network's exploration noise: spread e^log_std_init
     validate_every: int
     validation_episodes: int
     ppo: dict[str, Any]  # passed to stable_baselines3.PPO
@@ -226,6 +228,10 @@ def train(
             seed=train_config.seed,
             **train_config.ppo,
         )
+        # What SB3's log_std_init would do: SB3 starts log_std at 0 (spread 1.0). Set
+        # here rather than in SB3PolicyAdapter, so networks saved before still load.
+        with torch.no_grad():
+            ppo.policy.log_std.fill_(train_config.log_std_init)
     else:
         # Without seed=, SB3 would reuse the seed saved in the file.
         ppo = PPO.load(
