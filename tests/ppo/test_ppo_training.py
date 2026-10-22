@@ -1,5 +1,6 @@
 import csv
 import dataclasses
+import math
 from types import SimpleNamespace
 
 import numpy as np
@@ -27,26 +28,31 @@ def test_default_config_loads_with_ppo_settings() -> None:
     assert train_config.ppo["policy_kwargs"]["hidden_sizes"] == [64, 64]
 
 
-def test_training_landing_rate_counts_the_last_finished_flights() -> None:
+def test_training_numbers_are_over_the_last_finished_flights() -> None:
     logger = Logger(None, [])
     callback = TrainingFlightsCallback()
     callback.init_callback(SimpleNamespace(num_timesteps=0, logger=logger))  # the trainer
-    landed, crashed = {"outcome": Outcome.LANDED}, {"outcome": Outcome.LOST_CONTROL}
+    # The info of a flight's last step: its outcome, and its total reward from SB3's Monitor.
+    landed = {"outcome": Outcome.LANDED, "episode": {"r": 150.0}}
+    crashed = {"outcome": Outcome.LOST_CONTROL, "episode": {"r": -90.0}}
 
     def step(infos: list[dict], dones: list[bool]) -> None:
         callback.update_locals({"infos": infos, "dones": np.array(dones)})
         callback.on_step()
 
+    assert callback.get_landing_rate() is None and callback.get_average_reward() is None
     step([{}, {}], [False, False])  # two rockets, both still flying
     step([landed, crashed], [True, True])
     step([{}, landed], [False, True])
     callback.on_rollout_end()
     assert logger.name_to_value["rollout/landing_rate"] == pytest.approx(2 / 3)
+    assert callback.get_average_reward() == pytest.approx((150 - 90 + 150) / 3)
 
     for _ in range(TRAINING_FLIGHTS):  # the crash drops out of the last 100 flights
         step([landed], [True])
     callback.on_rollout_end()
     assert logger.name_to_value["rollout/landing_rate"] == 1.0
+    assert callback.get_average_reward() == 150.0
 
 
 @pytest.mark.parametrize(
@@ -54,14 +60,41 @@ def test_training_landing_rate_counts_the_last_finished_flights() -> None:
     [(0, 250_000), (5_005_312, 5_250_000)],  # a new run; a run continued after 5M steps
 )
 def test_validation_starts_at_the_next_multiple_of_validate_every(
-    steps_so_far: int, first_validation: int
+    steps_so_far: int, first_validation: int, tmp_path
 ) -> None:
-    callback = ValidationCallback(build_train_config(TRAIN_CONFIG_FILE), None, None, -1.0)
+    callback = ValidationCallback(
+        build_train_config(TRAIN_CONFIG_FILE),
+        tmp_path,
+        None,
+        TrainingFlightsCallback(),
+        -1.0,
+        -math.inf,
+    )
     callback.init_callback(SimpleNamespace(num_timesteps=steps_so_far))  # the trainer
 
     callback.on_training_start({}, {})
 
     assert callback.next_validation_step == first_validation
+    assert "validation" in (tmp_path / "training.log").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("landing_rate", "reward", "better"),
+    [
+        (1.0, 140.0, True),  # a higher landing rate wins, even with a lower reward
+        (0.9, 160.0, True),  # the same landing rate with a higher reward
+        (0.9, 150.0, False),  # a tie on both keeps the earlier network
+        (0.9, 140.0, False),
+        (0.8, 200.0, False),
+    ],
+)
+def test_the_best_network_has_the_best_landing_rate_then_reward(
+    landing_rate: float, reward: float, better: bool, tmp_path
+) -> None:
+    callback = ValidationCallback(
+        build_train_config(TRAIN_CONFIG_FILE), tmp_path, None, TrainingFlightsCallback(), 0.9, 150.0
+    )
+    assert callback.beats_best(landing_rate, reward) == better
 
 
 def test_a_tiny_training_run_saves_everything(
