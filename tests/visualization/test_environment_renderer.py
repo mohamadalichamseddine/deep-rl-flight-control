@@ -1,5 +1,6 @@
 import imageio
 import numpy as np
+import pygame
 import pytest
 
 from rocketlander.environment.env_config import EnvConfig
@@ -57,6 +58,21 @@ def test_human_mode_runs_a_live_window(
     assert env.environment_renderer is not None and not env.window_closed
     env.close()
     assert env.environment_renderer is None
+
+
+def test_the_window_stays_open_until_it_is_closed(
+    rocket_spec: RocketSpec, env_config: EnvConfig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("SDL_VIDEODRIVER", "dummy")  # an invisible window, for testing
+    env = RocketLandingEnv(rocket_spec, env_config, level=0, render_mode="human")
+    env.reset(options={"state": RocketState(0.0, 50.0, 0.0, -5.0)})
+    assert not env.window_closed
+
+    pygame.event.post(pygame.event.Event(pygame.QUIT))  # the person closes the window
+    env.environment_renderer.wait_until_closed()
+
+    assert env.window_closed
+    env.close()
 
 
 def test_video_writer_holds_the_last_frame(tmp_path) -> None:

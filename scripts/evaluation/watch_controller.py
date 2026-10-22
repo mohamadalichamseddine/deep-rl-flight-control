@@ -1,7 +1,8 @@
-"""Watch a controller fly in the live window, from new random starts or from the test set.
+"""Watch a controller fly in the live window, from new random starts or one test episode.
 
-With --test-episode, it re-flies test episodes exactly as the evaluation flew them: same seed,
-same controller.
+With --test-episode, it re-flies that test episode exactly as the evaluation flew it: same
+seed, same controller. After the last flight, the window stays open until you close it (or
+press Esc).
 
     uv run python scripts/evaluation/watch_controller.py          # PD, level 0, random starts
     uv run python scripts/evaluation/watch_controller.py --level 2 --test-episode 137
@@ -31,11 +32,16 @@ def main() -> None:
     parser.add_argument(
         "--test-episode",
         type=int,
-        help="fly the test set from this test episode on (default: new random starts)",
+        help="fly only this test episode (default: new random starts)",
     )
-    parser.add_argument("--flights", type=int, help="stop after this many flights")
+    parser.add_argument(
+        "--flights", type=int, help="with random starts: stop after this many flights"
+    )
     parser.add_argument("--record", help="save the flights to this MP4 file")
     args = parser.parse_args()
+    if args.test_episode is not None and args.flights is not None:
+        raise SystemExit("--test-episode flies one flight: leave out --flights")
+    flights_to_fly = 1 if args.test_episode is not None else args.flights
 
     rocket_spec = build_rocket_spec(ROCKET_SPEC_FILE)
     env_config = build_env_config(ENV_CONFIG_FILE)
@@ -49,11 +55,11 @@ def main() -> None:
     )
     fps = env.metadata["render_fps"]
     video = VideoWriter(args.record, fps) if args.record else None
+    seed = None if args.test_episode is None else seed_for_test_episode(args.test_episode)
+    label = "random start" if args.test_episode is None else f"test episode {args.test_episode}"
     flights = 0
     try:
-        while not env.window_closed and flights != args.flights:
-            episode = None if args.test_episode is None else args.test_episode + flights
-            seed = None if episode is None else seed_for_test_episode(episode)
+        while not env.window_closed and flights != flights_to_fly:
             observation, _ = env.reset(seed=seed)
             if video:
                 video.add(env.environment_renderer.to_array())
@@ -65,11 +71,13 @@ def main() -> None:
                 done = terminated or truncated
             if done:
                 flights += 1
-                label = "random start" if episode is None else f"test episode {episode}"
                 reasons = "; ".join(describe_failures(info["touchdown"], info["failed_checks"]))
                 print(f"{label}: {info['outcome']}" + (f" ({reasons})" if reasons else ""))
                 if video:
                     video.hold(1.5)
+        if not env.window_closed:
+            print("done: close the window or press Esc")
+            env.environment_renderer.wait_until_closed()
     finally:
         env.close()
         if video:

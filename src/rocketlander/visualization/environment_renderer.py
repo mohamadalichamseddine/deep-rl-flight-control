@@ -132,6 +132,12 @@ class EnvironmentRenderer:
                 self._handle_events()
                 self._clock.tick(30)
 
+    def wait_until_closed(self) -> None:
+        """Keep the last frame up until the person watching closes the window (or presses Esc)."""
+        while not self.closed:
+            self._handle_events()
+            self._clock.tick(30)
+
     def to_array(self) -> np.ndarray:
         """The current frame as an RGB image of shape (height, width, 3)."""
         return np.transpose(pygame.surfarray.array3d(self.surface), (1, 0, 2))
