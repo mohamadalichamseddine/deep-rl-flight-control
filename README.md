@@ -50,7 +50,8 @@ steps go into each network update, so runs with different values can't be compar
 Each training run belongs to an experiment, named after what it tries (e.g.
 `graded-touchdown-penalty`). Train the levels in order: level 0 starts from random weights, and
 each higher level continues from the best network of the level below, with the same experiment
-and seed.
+and seed. Every level starts with the same exploration noise (`log_std_init`), so it tries new
+moves on its harder starts.
 
 1. Train level 0:
 
@@ -152,3 +153,20 @@ To activate `.venv/` in your shell instead of using `uv run`:
 .venv\Scripts\Activate.ps1   # PowerShell (Windows)
 source .venv/bin/activate    # bash/zsh (Linux, macOS)
 ```
+
+## Future improvements
+
+- **Steadier training:** training sometimes collapses after a single large update, for example
+  into hovering or into touching down a bit too fast, and takes millions of steps to recover.
+  PPO's `target_kl` (stop an update when the policy changes too much) or a learning rate that
+  shrinks over training could prevent it.
+- **More validation starts:** 50 starts make the validation landing rate jumpy, so a lucky
+  round can be saved as the best network. More starts, or ranking by the average of recent
+  rounds, would pick more reliably.
+- **More seeds:** results so far come from one seed; a second seed would show whether they
+  hold up.
+- **Gentler, more precise touchdowns:** the networks land faster and with less fuel than the
+  PD autopilot, but with touchdowns closer to the limits. A bonus for landing well inside them
+  could close that gap.
+- **Harder conditions:** wind, sensor noise, or engine delays, to make the task closer to a real
+  rocket.

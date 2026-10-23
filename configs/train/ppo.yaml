@@ -4,11 +4,13 @@ total_steps: 5000000        # 20 ms control steps, summed over all rockets
 parallel_rockets: 8         # rockets flying in parallel, one per CPU core
 seed: 0
 
-# Exploration noise a new network starts with: the spread of the random throttles around
+# Exploration noise each level starts with: the spread of the random throttles around
 # the network's average action is e^log_std_init, and training then adjusts it. SB3's
 # default 0 (spread 1.0, on throttles from -1 to 1) was so noisy that training flights
 # rarely landed gently, and the noise-free network kept flipping between landing and
-# hovering. -1.0 gives a spread of 0.37.
+# hovering. -1.0 gives a spread of 0.37. Reset at every level, also when starting from the
+# level below: that network ends with little noise left (0.02 to 0.07 by level 2), too
+# little to discover the new moves the harder starts need.
 log_std_init: -1.0
 
 # Every validate_every steps, the current network (without exploration noise) flies the
