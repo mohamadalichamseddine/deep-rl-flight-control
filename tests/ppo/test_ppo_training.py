@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+import torch
 from stable_baselines3.common.logger import Logger
 
 from rocketlander.config_files import TRAIN_CONFIG_FILE
@@ -155,3 +156,40 @@ def test_a_tiny_training_run_saves_everything(
     assert steps == [128, 256, 384]
     assert build_train_config(tmp_path / "train_config.json").total_steps == 384
     assert "continuing level 0" in (tmp_path / "training.log").read_text(encoding="utf-8")
+
+
+def test_the_next_level_starts_with_the_full_exploration_noise(
+    rocket_spec: RocketSpec, env_config: EnvConfig, tmp_path
+) -> None:
+    train_config = dataclasses.replace(
+        build_train_config(TRAIN_CONFIG_FILE),
+        total_steps=128,
+        parallel_rockets=2,
+        validate_every=128,
+        validation_episodes=1,
+        ppo={
+            "n_steps": 64,
+            "batch_size": 64,
+            "n_epochs": 1,
+            "policy_kwargs": {"hidden_sizes": [64, 64]},
+        },
+    )
+    level0 = train(
+        train_config, rocket_spec, env_config, level=0, run_dir=tmp_path / "level0", start_from=None
+    )
+    # As if level 0 had trained long enough to leave little noise (spread e^-3 = 0.05).
+    with torch.no_grad():
+        level0.policy.log_std.fill_(-3.0)
+    level0.save(tmp_path / "quiet_network.zip")
+
+    level1 = train(
+        train_config,
+        rocket_spec,
+        env_config,
+        level=1,
+        run_dir=tmp_path / "level1",
+        start_from=tmp_path / "quiet_network.zip",
+    )
+
+    log_std = level1.policy.log_std.detach().numpy()
+    assert log_std == pytest.approx([train_config.log_std_init] * 3, abs=0.01)
