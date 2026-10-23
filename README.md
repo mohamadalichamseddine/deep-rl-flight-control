@@ -109,6 +109,29 @@ uv run python scripts/evaluation/compare_controllers.py --level 2    # side by s
 
 ## Results
 
+The best network so far, tested on the 500 fixed starts of each level and compared with the PD
+autopilot. Flight time and fuel are averages; fuel is in seconds of full main-engine thrust.
+
+| Test set | Network: landed | Network: time, fuel | PD autopilot: landed | PD autopilot: time, fuel |
+|---|---|---|---|---|
+| Level 0 | **100%** | 15.2 s, 8.0 s | 100% | 16.2 s, 8.3 s |
+| Level 1 | **100%** | 16.2 s, 8.8 s | 100% | 19.8 s, 10.4 s |
+| Level 2 | **94.4%** | 16.2 s, 9.2 s | 100% | 23.8 s, 12.8 s |
+
+- **How it was trained:** one seed (seed 0), levels in order: level 0 from random weights for
+  11M steps, then levels 1 and 2 for 10M steps each, each starting from the best network of the
+  level below. The best level-2 network came after 4.25M steps. Training took about 3 hours
+  in total on a laptop.
+- **What made the difference:** resetting the exploration noise at the start of each level.
+  Without it, the level-2 network landed only 56.6% of the level-2 test set.
+- **Where it still fails:** most level-2 failures start far from the pad and moving away from
+  it. The network turns around too late and comes down too fast. Almost all of them are on the
+  right side of the pad, which a second seed would show to be a habit of this run or not.
+- **Compared with the PD autopilot:** the network lands faster and with less fuel, while the
+  PD autopilot lands every start, with touchdowns closer to the pad center.
+
+## Output files
+
 Results stay on your computer, in `runs/` (not committed):
 
 ```
