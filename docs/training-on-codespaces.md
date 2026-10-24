@@ -13,7 +13,7 @@ on 8 cores, only about twice as slow. The free plan includes 120 core-hours per 
 on 4 cores.
 
 The codespace is built from a branch on GitHub, so push your changes before creating it. The
-training steps are the same as on your computer (see the [README](../README.md#train-a-network)).
+training steps are the same as on your computer (see [Training a network](training.md)).
 
 ## 1. Create a codespace
 
