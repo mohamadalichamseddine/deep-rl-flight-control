@@ -13,6 +13,10 @@ PD (proportional-derivative) autopilot on the same 500 test starts per difficult
 **Result:** the network lands **100%, 100% and 94.4%** of the test starts at levels 0, 1 and 2
 (the autopilot lands all of them), while landing faster and using less fuel.
 
+**Try it in your browser:** [deep-rl-rocket-landing.web.app](https://deep-rl-rocket-landing.web.app/)
+flies the trained network from this project, using its weights
+([source code](https://github.com/mohamadalichamseddine/rocket-landing-web)).
+
 Box2D does the physics, and Stable-Baselines3 (SB3) provides the PPO algorithm. The rocket
 model, the landing environment, the reward, the network (PyTorch), the autopilot and the
 evaluation are written for this project.
@@ -186,17 +190,17 @@ total. Each kept the settings of the one before and changed one part of the rewa
 training. The landing rates are each experiment's best network on the test set of its level
 (500 starts).
 
-| # | Experiment | What changed | Landed: level 0 | Landed: level 2 | What happened |
-|---|---|---|---|---|---|
-| 01 | first-reward | first reward: unsafe touchdown -50, and -10 per m/s of impact speed; no time-limit penalty | 95.0% | | learned to land only after hovering for about 4M steps; slow (28 s per flight) |
-| 02 | graded-touchdown-penalty | unsafe touchdown graded: -10, and -10 per limit's worth of miss; time limit -100 | 0% | | hovered until the time limit: the far-off penalty looked cheaper than a near miss |
-| 03 | time-cost | a time cost of 1.0 per second in the air | 0% | | still hovered |
-| 04 | cheaper-near-misses | -2 instead of -10 per limit's worth of miss | 100% | | landed within 0.5M steps, then training collapsed into hovering |
-| 05 | lower-learning-rate | learning rate 3e-4 → 1e-4 | 36.8% | | the failures touched down just off center; training collapsed into hovering and was stopped at 3.25M steps |
-| 06 | longer-horizon | gamma 0.999 → 0.9995 | 100% | | landed every test start, but training collapsed into hovering again |
-| 07 | less-exploration-noise | starting noise spread 1.0 → 0.37 | 71.2% | | training collapsed into unsafe touchdowns |
-| 08 | higher-fuel-cost | fuel cost 0.3 → 2.0; first run of levels 1 and 2 | 98.2% | 56.6% | training stayed steady at level 0; at level 2, the noise left from level 1 was too small to learn new moves |
-| 09 | reset-noise-per-level | exploration noise reset at the start of each level | 98.2% | **94.4%** | the final network (08 and 09 share the level-0 run) |
+| # | Experiment | What changed | Landed: level 0 | Landed: level 1 | Landed: level 2 | What happened |
+|---|---|---|---|---|---|---|
+| 01 | first-reward | first reward: unsafe touchdown -50, and -10 per m/s of impact speed; no time-limit penalty | 95.0% | | | learned to land only after hovering for about 4M steps; slow (28 s per flight) |
+| 02 | graded-touchdown-penalty | unsafe touchdown graded: -10, and -10 per limit's worth of miss; time limit -100 | 0% | | | hovered until the time limit: the far-off penalty looked cheaper than a near miss |
+| 03 | time-cost | a time cost of 1.0 per second in the air | 0% | | | still hovered |
+| 04 | cheaper-near-misses | -2 instead of -10 per limit's worth of miss | 100% | | | landed within 0.5M steps, then training collapsed into hovering |
+| 05 | lower-learning-rate | learning rate 3e-4 → 1e-4 | 36.8% | | | the failures touched down just off center; training collapsed into hovering and was stopped at 3.25M steps |
+| 06 | longer-horizon | gamma 0.999 → 0.9995 | 100% | | | landed every test start, but training collapsed into hovering again |
+| 07 | less-exploration-noise | starting noise spread 1.0 → 0.37 | 71.2% | | | training collapsed into unsafe touchdowns |
+| 08 | higher-fuel-cost | fuel cost 0.3 → 2.0; first run of levels 1 and 2 | 98.2% | 91.0% | 56.6% | training stayed steady at level 0; at level 2, the noise left from level 1 was too small to learn new moves |
+| 09 | reset-noise-per-level | exploration noise reset at the start of each level | 98.2% | 98.6% | **94.4%** | the final network (08 and 09 share the level-0 run) |
 
 What they showed:
 
@@ -237,21 +241,22 @@ uv sync      # creates .venv/ with Python 3.13 and the exact versions pinned in 
 ### 2. Train
 
 Train the levels in order: level 0 starts from random weights, and each higher level starts
-from the best network of the level below. These commands train the network from the results
-(experiment 09, seed 0): level 0 for 11M steps, in three parts, then levels 1 and 2 for 10M
-steps each.
+from the best network of the level below. Replace `<experiment-name>` with a name of your
+choice, such as `my-first-run`: it names the folder the outputs go to. These commands repeat the
+training of the network from the results (experiment 09, seed 0): level 0 for 11M steps, in
+three parts, then levels 1 and 2 for 10M steps each.
 
 ```powershell
-uv run python scripts/ppo/train_ppo.py --experiment 09-reset-noise-per-level --level 0
-uv run python scripts/ppo/train_ppo.py --experiment 09-reset-noise-per-level --level 0 --continue --steps 5000000
-uv run python scripts/ppo/train_ppo.py --experiment 09-reset-noise-per-level --level 0 --continue --steps 1000000
-uv run python scripts/ppo/train_ppo.py --experiment 09-reset-noise-per-level --level 1 --steps 10000000
-uv run python scripts/ppo/train_ppo.py --experiment 09-reset-noise-per-level --level 2 --steps 10000000
+uv run python scripts/ppo/train_ppo.py --experiment <experiment-name> --level 0
+uv run python scripts/ppo/train_ppo.py --experiment <experiment-name> --level 0 --continue --steps 5000000
+uv run python scripts/ppo/train_ppo.py --experiment <experiment-name> --level 0 --continue --steps 1000000
+uv run python scripts/ppo/train_ppo.py --experiment <experiment-name> --level 1 --steps 10000000
+uv run python scripts/ppo/train_ppo.py --experiment <experiment-name> --level 2 --steps 10000000
 ```
 
 All of it took about 3 hours on a laptop. Training flies 8 rockets in parallel, one per CPU
 core: keep the 8 to get the same results, as with fewer cores it only runs slower. The
-networks, logs and training curves go to `runs/training/09-reset-noise-per-level/seed0/`.
+networks, logs and training curves go to `runs/training/<experiment-name>/seed0/`.
 [Training a network](docs/training.md) has the other options, how to follow progress, and how
 to train on GitHub Codespaces.
 
@@ -261,7 +266,7 @@ Fly the best level-2 network and the PD autopilot on the test sets (500 fixed st
 level), then compare them:
 
 ```powershell
-uv run python scripts/evaluation/evaluate_controller.py --network runs/training/09-reset-noise-per-level/seed0/level2/best_network.zip
+uv run python scripts/evaluation/evaluate_controller.py --network runs/training/<experiment-name>/seed0/level2/best_network.zip
 uv run python scripts/evaluation/evaluate_controller.py              # the PD autopilot
 uv run python scripts/evaluation/compare_controllers.py --level 2    # the two side by side
 ```
