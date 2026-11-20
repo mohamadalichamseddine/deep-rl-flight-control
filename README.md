@@ -1,14 +1,15 @@
-# Rocket Landing Controller with Deep Reinforcement Learning
+# Booster Landing Controller with Deep Reinforcement Learning
 
 <p align="center">
-  <img src="docs/images/landing.gif" alt="The trained network landing the rocket from a hard start" width="640">
+  <img src="docs/images/landing.gif" alt="The trained network landing the booster from a hard start" width="640">
 </p>
 <p align="center"><em>The trained network on a level-2 test start it never saw in training: 149 m
 up, 40 m to the side of the pad, and falling at 26 m/s. Shown in real time.</em></p>
 
-A 2D rocket, simulated with Box2D, learns to land on a pad. A small neural network (two layers
-of 64) is trained with PPO (Proximal Policy Optimization), then compared with a hand-written
-PD (proportional-derivative) autopilot on the same 500 test starts per difficulty level.
+A 2D rocket booster, simulated with Box2D, learns to land on a pad. A small neural network
+(two layers of 64) is trained with PPO (Proximal Policy Optimization), then compared with a
+hand-written PD (proportional-derivative) autopilot on the same 500 test starts per difficulty
+level.
 
 **Result:** the network lands **100%, 100% and 94.4%** of the test starts at levels 0, 1 and 2
 (the autopilot lands all of them), while landing faster and using less fuel.
@@ -17,7 +18,7 @@ PD (proportional-derivative) autopilot on the same 500 test starts per difficult
 flies the trained network from this project, using its weights
 ([source code](https://github.com/mohamadalichamseddine/rocket-landing-web)).
 
-Box2D does the physics, and Stable-Baselines3 (SB3) provides the PPO algorithm. The rocket
+Box2D does the physics, and Stable-Baselines3 (SB3) provides the PPO algorithm. The booster
 model, the landing environment, the reward, the network (PyTorch), the autopilot and the
 evaluation are written for this project.
 
@@ -50,13 +51,13 @@ touchdown compared with the safe-landing limits, the dashed boxes (middle and ri
 
 ## The task
 
-### The rocket
+### The booster
 
-<p align="center"><img src="docs/images/rocket.png" alt="The rocket: body, engine block, legs, and its three nozzles" width="320"></p>
+<p align="center"><img src="docs/images/rocket.png" alt="The booster: body, engine block, legs, and its three nozzles" width="320"></p>
 
 - 100 kg and 3 m tall: an 80 kg body and a 20 kg engine block, standing on two legs.
-- A main engine of 2,000 N at the base (about twice the rocket's weight), and two side nozzles
-  of 25 N near the top. The rocket moves sideways mostly by tilting, so that the main engine
+- A main engine of 2,000 N at the base (about twice the booster's weight), and two side nozzles
+  of 25 N near the top. The booster moves sideways mostly by tilting, so that the main engine
   pushes partly sideways; the side nozzles turn it.
 - Box2D calculates the center of mass (1.24 m above the base) and the moment of inertia
   (88 kg·m²) from the shapes, and simulates the flight: 50 control steps per second, each split
@@ -79,7 +80,7 @@ only the legs touch the ground:
 |---|---|---|---|---|
 | ≤ 0.5 m | ≤ 0.5 m/s | ≤ 0.3 m/s | ≤ 5° | ≤ 5°/s |
 
-Any other touchdown is an **unsafe touchdown**. A flight also ends when the rocket tilts past
+Any other touchdown is an **unsafe touchdown**. A flight also ends when the booster tilts past
 90° (**lost control**), goes more than 100 m to the side or above 300 m (**out of bounds**), or
 reaches 60 s (**time limit**, which stands in for running out of fuel). The engines are cut at
 touchdown.
@@ -96,7 +97,7 @@ Each start is drawn at random within the ranges of its level:
 
 ## Reward
 
-Every step, the rocket earns how much its **landing score** improved, minus the fuel and the
+Every step, the booster earns how much its **landing score** improved, minus the fuel and the
 time it used:
 
 $$r_t = \big(S(s_{t+1}) - S(s_t)\big) - 2.0 \cdot \text{fuel}_t - 1.0 \cdot \Delta t$$
@@ -142,7 +143,7 @@ Why it looks like this (the numbers refer to the [experiments](#experiments)):
 - Two separate networks with tanh activations, 9,735 parameters in total. The actor decides
   the throttles. The critic estimates how much reward is still to come, which PPO uses during
   training to tell better-than-expected actions from worse ones. After training, only the actor
-  flies the rocket.
+  flies the booster.
 - Written in PyTorch (`src/rocketlander/ppo/rocket_network.py`) and plugged into SB3's PPO,
   which adds the output layers.
 - Each observation is divided by a fixed typical size (10 m, 50 m, 5 m/s, 10 m/s, 1, 1,
@@ -153,7 +154,7 @@ Why it looks like this (the numbers refer to the [experiments](#experiments)):
 - **Levels in order:** level 0 starts from random weights; each higher level starts from the
   best network of the level below. The exploration noise goes back to its starting value at
   every level.
-- **Experience:** 8 rockets fly at once, each in its own process, with exploration noise added
+- **Experience:** 8 boosters fly at once, each in its own process, with exploration noise added
   to the network's actions. After every 8 × 1,024 = 8,192 steps, PPO updates the network: 10
   passes over those steps, in minibatches of 256.
 - **Validation:** every 250,000 steps, the network flies 50 fixed validation starts without
@@ -174,14 +175,14 @@ From `configs/train/ppo.yaml`:
 | Learning rate | 1e-4 | 3e-4 | at 3e-4, training found landing, then lost it again |
 | Discount factor (gamma) | 0.9995 | 0.99 | a flight lasts up to 3,000 steps; at 0.999, the time-limit penalty 60 s ahead counted 5%, at 0.9995 it counts 22% |
 | GAE lambda | 0.98 | 0.95 | |
-| Steps per rocket per update (`n_steps`) | 1,024 | 2,048 | × 8 rockets = 8,192 steps per update |
+| Steps per booster per update (`n_steps`) | 1,024 | 2,048 | × 8 boosters = 8,192 steps per update |
 | Minibatch size | 256 | 64 | |
 | Epochs per update | 10 | 10 | |
 | Clip range | 0.2 | 0.2 | |
 | Entropy bonus | 0 | 0 | |
 | Starting exploration noise (`log_std_init`) | -1.0 (spread 0.37) | 0 (spread 1.0) | SB3's default was so noisy that training flights rarely landed gently; reset at every level |
 | Hidden layers | 64, 64 (tanh), actor and critic separate | the same | |
-| Rockets in parallel | 8 | | one per CPU core |
+| Boosters in parallel | 8 | | one per CPU core |
 
 ## Experiments
 
@@ -254,7 +255,7 @@ uv run python scripts/ppo/train_ppo.py --experiment <experiment-name> --level 1 
 uv run python scripts/ppo/train_ppo.py --experiment <experiment-name> --level 2 --steps 10000000
 ```
 
-All of it took about 3 hours on a laptop. Training flies 8 rockets in parallel, one per CPU
+All of it took about 3 hours on a laptop. Training flies 8 boosters in parallel, one per CPU
 core: keep the 8 to get the same results, as with fewer cores it only runs slower. The
 networks, logs and training curves go to `runs/training/<experiment-name>/seed0/`.
 [Training a network](docs/training.md) has the other options, how to follow progress, and how
@@ -288,10 +289,10 @@ uv run python scripts/evaluation/watch_controller.py --network networks/landing_
 # Watch the PD autopilot land
 uv run python scripts/evaluation/watch_controller.py --level 2
 
-# Fly the rocket yourself: arrow keys, Esc quits
+# Fly the booster yourself: arrow keys, Esc quits
 uv run python scripts/environment/fly_manually.py
 
-# Draw the rocket as Box2D sees it, and plot a fixed command sequence
+# Draw the booster as Box2D sees it, and plot a fixed command sequence
 uv run python scripts/rocket/draw_rocket.py --show
 uv run python scripts/rocket/scripted_flight.py --show
 
@@ -318,14 +319,14 @@ same folders:
 
 | Folder | What it holds |
 |---|---|
-| `rocket/` | the rocket: its description, its state, and its physics (Box2D) |
+| `rocket/` | the booster: its description, its state, and its physics (Box2D) |
 | `environment/` | the landing task: observations, actions, rewards, endings |
 | `pd/` | the hand-written PD autopilot, the baseline |
 | `ppo/` | the neural network, its PPO training, and the trained network as a controller |
 | `evaluation/` | measuring any controller on the fixed test sets |
 | `visualization/` | drawing flights: the live window and video files |
 
-Settings live in `configs/`: `rocket/` (the rocket's shape and engines), `env/` (gravity, time
+Settings live in `configs/`: `rocket/` (the booster's shape and engines), `env/` (gravity, time
 step, landing rules, rewards, starting conditions), `pd/` (the PD autopilot's gains), and
 `train/` (PPO training settings). `networks/` holds the trained network from the results, and
 `docs/` the guides and the images of this page. Training and test outputs go to `runs/`, which
@@ -347,4 +348,4 @@ is not committed.
   PD autopilot, but with touchdowns closer to the limits. A bonus for landing well inside them
   could close that gap.
 - **Harder conditions:** wind, sensor noise, or engine delays, to make the task closer to a real
-  rocket.
+  booster.
